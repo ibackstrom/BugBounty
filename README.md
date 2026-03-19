@@ -2,11 +2,11 @@
 Overview of successful bounties 
 
 
-# SSRF via Webhook Endpoint URL — DNS Rebinding to Localhost
+# SSRF via Webhook Endpoint URL: DNS Rebinding to Localhost
 
 **Severity:** P5 (Informational)  
 **Category:** Server-Side Request Forgery (SSRF)  
-**CWE:** CWE-918 — Server-Side Request Forgery
+**CWE:** CWE-918 : Server-Side Request Forgery
 
 ---
 
@@ -16,7 +16,7 @@ The webhook configuration API (`/api/v2/webhooks`) accepts arbitrary endpoint UR
 
 ## Technical Details
 
-1. **Endpoint:** `POST /api/v2/webhooks` — used to register a URL that receives event-driven HTTP callbacks.
+1. **Endpoint:** `POST /api/v2/webhooks` used to register a URL that receives event-driven HTTP callbacks.
 2. **Root Cause:** The API performs no DNS resolution check or IP allowlist/denylist validation on the user-supplied `endpoint` parameter before persisting the webhook configuration.
 3. **Attack Vector:** A domain owned by the vendor itself was found resolving to `127.0.0.1` via public DNS. By setting this domain as the webhook target, outbound requests are routed to the server's loopback adapter.
 
@@ -48,11 +48,11 @@ POST /api/v2/webhooks
 
 
 
-# Broken Access Control — Unauthenticated Organization Join
+# Broken Access Control : Unauthenticated Organization Join
 
 **Severity:** P5 (Informational)  
 **Category:** Improper Authentication / Broken Access Control  
-**CWE:** CWE-287 — Improper Authentication
+**CWE:** CWE-287 : Improper Authentication
 
 ---
 
