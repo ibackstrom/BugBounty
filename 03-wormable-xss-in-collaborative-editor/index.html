@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>From a Missing Auth Check to a Self-Replicating Worm in a Collaborative Writing App — katabasis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<header>
+  <div class="container">
+    <a href="../" class="site-title">katabasis</a>
+  </div>
+</header>
+<main class="container">
+<a href="../" class="back">all write-ups</a>
+<article>
+<h1>From a Missing Auth Check to a Self-Replicating Worm in a Collaborative Writing App</h1>
+<p>Target: a collaborative writing platform with AI features, TTS narration, real-time editing. Think Google Docs but smaller.</p>
+<p>The core bug was architectural. The server gave every authenticated user implicit viewer access to every document. Then it relied on per-endpoint role checks that were inconsistently applied. Some endpoints checked. Some did not. Some crashed.</p>
+<h2>The evidence</h2>
+<pre><code class="language-bash"># Hard denial (correct):
+GET  /api/doc/VICTIM → &quot;Access denied&quot;
+
+# Soft denial (broken):
+POST /api/doc/VICTIM/updates/client → &quot;Insufficient permissions. Editor or manager access required.&quot;
+</code></pre>
+<p>"Editor or manager access required" means the server recognized me as a viewer on someone else's doc. The auth model defaults to yes and needs explicit no. Backwards.</p>
+<h2>Narration endpoint: no check at all</h2>
+<pre><code class="language-bash">curl -X POST &quot;https://[TARGET]/api/doc/VICTIM_DOC/narrate&quot; \
+  -H &quot;Cookie: auth_token=ATTACKER&quot; \
+  -d '{&quot;text&quot;:&quot;draining your quota&quot;}'
+# Returns audio. Works on any document.
+</code></pre>
+<p>Confirmed on 5 documents. Doc serials are sequential, so enumerate and drain every user's paid TTS quota.</p>
+<h2>AI endpoints: crash the whole service</h2>
+<pre><code class="language-bash">POST /api/doc/VICTIM/ai/edit  → 502
+POST /api/doc/VICTIM/ai/chat  → 503
+</code></pre>
+<p>No auth check, but the server crashes processing unauthorized doc data. Hitting ~10 doc serials caused full 503 for ~30 seconds across the entire platform. Unauthenticated DoS via enumeration.</p>
+<p>The scariest part: the ai/edit endpoint loaded the victim's document from Postgres with zero authorization. It only failed because a BigInt clock value overflowed int32. If someone fixes that type bug without adding auth, the endpoint becomes full document read via AI summarization.</p>
+<h2>Stored XSS in chat</h2>
+<p>The chat panel rendered raw HTML. No sanitization, no CSP enforcement (script-src had unsafe-inline).</p>
+<pre><code class="language-html">&lt;img src=x onerror=&quot;fetch('/api/doc/VICTIM/access/collaborator/manager',
+  {method:'POST',headers:{'Content-Type':'application/json'},
+  body:JSON.stringify({email:'attacker@gmail.com'})})&quot;&gt;
+</code></pre>
+<h2>Five attack chains</h2>
+<p><strong>Chain 1: One-click platform breach.</strong> Open redirect in OAuth flow sends victim to attacker's public doc. Stored XSS steals auth_token. Admin token gives access to every document, every AI request (with user emails, prompts, outputs), full version history.</p>
+<p><strong>Chain 2: Quota theft at scale.</strong> Enumerate sequential doc serials. Hit /narrate on each. Drain TTS quota across the user base.</p>
+<p><strong>Chain 3: Cascading DoS.</strong> Enumerate serials. Rapid requests to /narrate and /ai/edit. Full 503 for all users, confirmed.</p>
+<p><strong>Chain 4: XSS to manager on any doc.</strong> Attacker creates public doc with XSS payload. Open redirect lures doc owner to it. XSS fires in owner's browser, calls /access/collaborator/manager to add attacker. Attacker now has full read/write/delete on victim's doc.</p>
+<p><strong>Chain 5: Wormable infection.</strong> Steal victim's token via XSS. Use stolen token to inject XSS into victim's shared docs. Each shared doc infects its viewers. Exponential spread across the collaboration network.</p>
+<h2>Root cause</h2>
+<p>No centralized auth middleware. Each endpoint implements its own check (or does not). The implicit viewer grant means any new endpoint without an explicit deny is automatically vulnerable. The XSS is just unsanitized HTML rendering in the chat.</p>
+<p>Everything here is basic stuff. Centralized auth middleware, HTML sanitization, CSP without unsafe-inline, OAuth redirect validation. The bugs are not exotic. The chains they enable are.</p>
+</article>
+</main>
+<footer>
+  <div class="container">&copy; 2025 &mdash; responsible disclosure, always.</div>
+</footer>
+</body>
+</html>

