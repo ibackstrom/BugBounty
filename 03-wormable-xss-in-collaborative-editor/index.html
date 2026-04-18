@@ -4,17 +4,21 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>From a Missing Auth Check to a Self-Replicating Worm in a Collaborative Writing App — r1gor</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../style.css">
 </head>
 <body>
+<div class="page-frame">
+<span class="corner-bl">&mdash;</span>
+<span class="corner-br">&mdash;</span>
 <header>
   <div class="container">
+    <div class="site-id">[00.00_r1gor]<br>[00.00_bugbounty]</div>
     <a href="../" class="site-title">r1gor</a>
+    <div class="bar"><div class="bar-fill"></div><div class="bar-short"></div></div>
   </div>
 </header>
 <main class="container">
+<hr class="section-rule">
 <a href="../" class="back">all write-ups</a>
 <article>
 <h1>From a Missing Auth Check to a Self-Replicating Worm in a Collaborative Writing App</h1>
@@ -61,6 +65,7 @@ POST /api/doc/VICTIM/ai/chat  → 503
 <footer>
   <div class="container">&copy; 2025 &mdash; responsible disclosure, always.</div>
 </footer>
+</div>
 <script>
 document.querySelectorAll('pre').forEach(pre => {
   const btn = document.createElement('button');
