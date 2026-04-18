@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>katabasis</title>
+  <title>r1gor</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
@@ -11,36 +11,46 @@
 <body>
 <header>
   <div class="container">
-    <a href="./" class="site-title">katabasis</a>
+    <a href="./" class="site-title">r1gor</a>
   </div>
 </header>
 <main class="container">
 <p class="index-intro">Bug bounty write-ups.</p>
+<div class="stats">
+  <div><div class="stat-value">5</div><div class="stat-label">Write-ups</div></div>
+  <div><div class="stat-value">3</div><div class="stat-label">Critical</div></div>
+  <div><div class="stat-value">2</div><div class="stat-label">High</div></div>
+</div>
 <ul class="article-list">
 <li><a href="01-semicolon-that-exposed-530-endpoints/">
-  <div class="num">01</div>
+  <div class="meta-row"><span class="num">01</span><span class="severity high">High</span></div>
   <div class="title">How a Semicolon Exposed 530 API Endpoints on a Major Car Manufacturer's Platform</div>
   <div class="summary">WAF bypass on a car manufacturer. A semicolon exposed 530 endpoints, dev tokens, and admin ops on production.</div>
+  <div class="tags"><span class="tag">WAF Bypass</span><span class="tag">API Exposure</span><span class="tag">Spring Boot</span></div>
 </a></li>
 <li><a href="02-template-bypass-dumped-9453-records/">
-  <div class="num">02</div>
+  <div class="meta-row"><span class="num">02</span><span class="severity critical">Critical</span></div>
   <div class="title">The API Said "Or" and I Chose the Unguarded Door: 9,453 Records from Zero Privileges</div>
   <div class="summary">ERP authorization flaw. The API offered two input paths — only one had an auth check. 9,453 records out.</div>
+  <div class="tags"><span class="tag">Auth Bypass</span><span class="tag">IDOR</span><span class="tag">Data Leak</span></div>
 </a></li>
 <li><a href="03-wormable-xss-in-collaborative-editor/">
-  <div class="num">03</div>
+  <div class="meta-row"><span class="num">03</span><span class="severity critical">Critical</span></div>
   <div class="title">From a Missing Auth Check to a Self-Replicating Worm in a Collaborative Writing App</div>
   <div class="summary">Broken access control in a collaborative editor escalated to stored XSS, wormable infection, and platform-wide DoS.</div>
+  <div class="tags"><span class="tag">XSS</span><span class="tag">Worm</span><span class="tag">Auth Bypass</span><span class="tag">DoS</span></div>
 </a></li>
 <li><a href="04-xxe-and-auth-bypass-on-hospital-soap-service/">
-  <div class="num">04</div>
+  <div class="meta-row"><span class="num">04</span><span class="severity critical">Critical</span></div>
   <div class="title">XXE and Authentication Bypass on a Hospital Network's SOAP Service</div>
   <div class="summary">Hospital SOAP service. Namespace trick bypassed WS-Security, then XXE on the unauthenticated parser.</div>
+  <div class="tags"><span class="tag">XXE</span><span class="tag">Auth Bypass</span><span class="tag">Healthcare</span><span class="tag">SOAP</span></div>
 </a></li>
 <li><a href="05-firestore-rules-leaked-every-companys-hiring-strategy/">
-  <div class="num">05</div>
+  <div class="meta-row"><span class="num">05</span><span class="severity high">High</span></div>
   <div class="title">How Broken Firestore Rules Let Me Download Every Company's Hiring Strategy from an AI Recruiting Platform</div>
   <div class="summary">Firestore rules on a recruiting platform. Any free account could download every company's proprietary hiring criteria.</div>
+  <div class="tags"><span class="tag">Firebase</span><span class="tag">Broken Access Control</span><span class="tag">Data Leak</span></div>
 </a></li>
 </ul>
 </main>
