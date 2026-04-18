@@ -22,6 +22,7 @@
 <a href="../" class="back">all write-ups</a>
 <article>
 <h1>XXE and Auth Bypass on a Hospital SOAP Service</h1>
+<canvas id="gen-art" data-seed="04-xxe-and-auth-bypass-on-hospital-soap-service" width="640" height="200"></canvas>
 <p>Target is the eHealth integration hub of a major Belgian hospital
 network. Handles patient medical records, lab results, discharge
 letters, prescriptions. Production system, directly on the
@@ -152,16 +153,17 @@ header.</p>
   <div class="container">&copy; 2025 &mdash; responsible disclosure, always.</div>
 </footer>
 </div>
+<script src="../gen.js"></script>
 <script>
-document.querySelectorAll('pre').forEach(pre => {
-  const btn = document.createElement('button');
+document.querySelectorAll('pre').forEach(function(pre) {
+  var btn = document.createElement('button');
   btn.className = 'copy-btn';
   btn.textContent = 'copy';
-  btn.onclick = () => {
+  btn.onclick = function() {
     navigator.clipboard.writeText(pre.querySelector('code').textContent);
     btn.textContent = 'copied';
     btn.classList.add('copied');
-    setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1500);
+    setTimeout(function() { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1500);
   };
   pre.appendChild(btn);
 });

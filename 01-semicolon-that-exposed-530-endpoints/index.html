@@ -22,6 +22,7 @@
 <a href="../" class="back">all write-ups</a>
 <article>
 <h1>A Semicolon Got Me 530 Endpoints on a Car Manufacturer</h1>
+<canvas id="gen-art" data-seed="01-semicolon-that-exposed-530-endpoints" width="640" height="200"></canvas>
 <p>Target is the digital manual platform of one of the biggest car manufacturers
 in the world. Serves vehicle docs in 45 languages, connects to the in-car
 infotainment system. Runs Spring Boot.</p>
@@ -78,16 +79,17 @@ match what the WAF sees, not what the app sees.</p>
   <div class="container">&copy; 2025 &mdash; responsible disclosure, always.</div>
 </footer>
 </div>
+<script src="../gen.js"></script>
 <script>
-document.querySelectorAll('pre').forEach(pre => {
-  const btn = document.createElement('button');
+document.querySelectorAll('pre').forEach(function(pre) {
+  var btn = document.createElement('button');
   btn.className = 'copy-btn';
   btn.textContent = 'copy';
-  btn.onclick = () => {
+  btn.onclick = function() {
     navigator.clipboard.writeText(pre.querySelector('code').textContent);
     btn.textContent = 'copied';
     btn.classList.add('copied');
-    setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1500);
+    setTimeout(function() { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1500);
   };
   pre.appendChild(btn);
 });

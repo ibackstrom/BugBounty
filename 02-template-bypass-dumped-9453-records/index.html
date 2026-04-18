@@ -22,6 +22,7 @@
 <a href="../" class="back">all write-ups</a>
 <article>
 <h1>Two Doors, One Room, 9453 Records</h1>
+<canvas id="gen-art" data-seed="02-template-bypass-dumped-9453-records" width="640" height="200"></canvas>
 <p>Target is an ERP platform. Manages employees, payroll, bank accounts,
 vendors, the works.</p>
 <p>The main data access endpoint accepts two input formats:</p>
@@ -91,16 +92,17 @@ where the request enters.</p>
   <div class="container">&copy; 2025 &mdash; responsible disclosure, always.</div>
 </footer>
 </div>
+<script src="../gen.js"></script>
 <script>
-document.querySelectorAll('pre').forEach(pre => {
-  const btn = document.createElement('button');
+document.querySelectorAll('pre').forEach(function(pre) {
+  var btn = document.createElement('button');
   btn.className = 'copy-btn';
   btn.textContent = 'copy';
-  btn.onclick = () => {
+  btn.onclick = function() {
     navigator.clipboard.writeText(pre.querySelector('code').textContent);
     btn.textContent = 'copied';
     btn.classList.add('copied');
-    setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1500);
+    setTimeout(function() { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1500);
   };
   pre.appendChild(btn);
 });

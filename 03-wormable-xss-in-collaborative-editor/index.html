@@ -22,6 +22,7 @@
 <a href="../" class="back">all write-ups</a>
 <article>
 <h1>Missing Auth Check to Self-Replicating Worm</h1>
+<canvas id="gen-art" data-seed="03-wormable-xss-in-collaborative-editor" width="640" height="200"></canvas>
 <p>Target is a collaborative writing platform with AI features, TTS
 narration, real-time editing. Think Google Docs but smaller.</p>
 <p>The core bug was architectural. The server gave every authenticated
@@ -97,16 +98,17 @@ The bugs are not exotic. The chains they enable are.</p>
   <div class="container">&copy; 2025 &mdash; responsible disclosure, always.</div>
 </footer>
 </div>
+<script src="../gen.js"></script>
 <script>
-document.querySelectorAll('pre').forEach(pre => {
-  const btn = document.createElement('button');
+document.querySelectorAll('pre').forEach(function(pre) {
+  var btn = document.createElement('button');
   btn.className = 'copy-btn';
   btn.textContent = 'copy';
-  btn.onclick = () => {
+  btn.onclick = function() {
     navigator.clipboard.writeText(pre.querySelector('code').textContent);
     btn.textContent = 'copied';
     btn.classList.add('copied');
-    setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1500);
+    setTimeout(function() { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1500);
   };
   pre.appendChild(btn);
 });

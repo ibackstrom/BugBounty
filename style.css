@@ -181,6 +181,15 @@ article strong {
   font-weight: 700;
 }
 
+/* Generative art */
+#gen-art {
+  width: 100%;
+  max-width: 640px;
+  height: auto;
+  display: block;
+  margin-bottom: 32px;
+}
+
 /* Code */
 code {
   font-family: var(--mono);

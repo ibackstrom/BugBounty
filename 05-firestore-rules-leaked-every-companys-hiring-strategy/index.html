@@ -22,6 +22,7 @@
 <a href="../" class="back">all write-ups</a>
 <article>
 <h1>Broken Firestore Rules Leaked Every Company's Hiring Strategy</h1>
+<canvas id="gen-art" data-seed="05-firestore-rules-leaked-every-companys-hiring-strategy" width="640" height="200"></canvas>
 <p>Target is an AI-powered recruiting platform. Companies use it to
 search candidates, define custom evaluation criteria, and let AI
 score matches. Free tier gives 5 credits. Enterprise plans cost
@@ -126,16 +127,17 @@ That is the breach.</p>
   <div class="container">&copy; 2025 &mdash; responsible disclosure, always.</div>
 </footer>
 </div>
+<script src="../gen.js"></script>
 <script>
-document.querySelectorAll('pre').forEach(pre => {
-  const btn = document.createElement('button');
+document.querySelectorAll('pre').forEach(function(pre) {
+  var btn = document.createElement('button');
   btn.className = 'copy-btn';
   btn.textContent = 'copy';
-  btn.onclick = () => {
+  btn.onclick = function() {
     navigator.clipboard.writeText(pre.querySelector('code').textContent);
     btn.textContent = 'copied';
     btn.classList.add('copied');
-    setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1500);
+    setTimeout(function() { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1500);
   };
   pre.appendChild(btn);
 });
