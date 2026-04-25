@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Untitled — r1gor</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<div class="page-frame">
+<span class="corner-bl">&mdash;</span>
+<span class="corner-br">&mdash;</span>
+<header>
+  <div class="container">
+    <div class="site-id">[00.00_r1gor]<br>[00.00_bugbounty]</div>
+    <a href="../" class="site-title">r1gor</a>
+    <div class="bar"><div class="bar-fill"></div><div class="bar-short"></div></div>
+  </div>
+</header>
+<main class="container">
+<hr class="section-rule">
+<a href="../" class="back">all write-ups</a>
+<article>
+<h1>Untitled</h1>
+<canvas id="gen-art" data-seed="08-ninetynine-million-for-twentythree" width="640" height="200"></canvas>
+<pre><code>---[  bugbounty notes, vol 1, article 08
+
+-------------------------[  ninety nine million euros of insurance for twenty three
+
+--------[  r1gor
+</code></pre>
+<p>second hand marketplace. shipping app. you print a label, pay a few
+extra euros, parcel is insured up to 500 EUR if it goes missing. nice
+little side service.</p>
+<p>three calls to buy a label.</p>
+<p>POST /api/orders/create     -&gt; get order uuid
+  PUT  /api/orders/summary    -&gt; get a price quote
+  POST /api/orders/purchase   -&gt; get a payment link</p>
+<p>the summary call is where the price is decided. you tell the server
+what the parcel is worth, the server tells you what coverage costs.</p>
+<p>----[  the call</p>
+<pre><code>PUT /api/orders/summary/&lt;uuid&gt;
+{
+  &quot;rate_uuid&quot;: &quot;...&quot;,
+  &quot;content_value&quot;: 10,
+  &quot;coverage_applied&quot;: true
+}
+</code></pre>
+<p>content_value is the value YOU declare. server trusts it. server uses
+it to price the coverage. you can guess where this goes.</p>
+<p>i sent a bigger number.</p>
+<pre><code>{ &quot;content_value&quot;: 99999999, &quot;coverage_applied&quot;: true }
+</code></pre>
+<p>response, http 200:</p>
+<pre><code>{
+  &quot;coverage_price&quot;:          { &quot;amount&quot;: &quot;20.00&quot;, &quot;currency&quot;: &quot;EUR&quot; },
+  &quot;label_price&quot;:             { &quot;amount&quot;: &quot;2.99&quot;,  &quot;currency&quot;: &quot;EUR&quot; },
+  &quot;max_coverage_price&quot;:      { &quot;amount&quot;: &quot;500&quot;,   &quot;currency&quot;: &quot;EUR&quot; },
+  &quot;min_content_value_price&quot;: { &quot;amount&quot;: &quot;25&quot;,    &quot;currency&quot;: &quot;EUR&quot; },
+  &quot;total_price&quot;:             { &quot;amount&quot;: &quot;22.99&quot;, &quot;currency&quot;: &quot;EUR&quot; },
+  &quot;extra_coverage_price&quot;:    { &quot;amount&quot;: &quot;20.00&quot;, &quot;currency&quot;: &quot;EUR&quot; }
+}
+</code></pre>
+<p>read it twice. same json object. server says max_coverage_price is 500
+EUR. then prices ninety nine million worth of coverage at 20 EUR flat.
+total bill twenty two euros and ninety nine cents.</p>
+<p>the rule and the violation are in the same response. like a speed
+limit sign painted on the side of a getaway car.</p>
+<p>----[  bonus rounds</p>
+<p>content_value zero, coverage on:</p>
+<pre><code>{ &quot;coverage_price&quot;: &quot;0.00&quot;, &quot;total_price&quot;: &quot;2.99&quot;, ... }
+</code></pre>
+<p>free coverage. attached as a real line item to the order. min content
+value is twenty five EUR according to the same response. enforced
+nowhere.</p>
+<p>parcel size, second bug, same shape. order created as size s. purchase
+call accepts parcel_size as a top level field. send hl. server prints
+the bigger label and charges the small label price. price was computed
+once at create time and never recomputed.</p>
+<p>----[  why it works</p>
+<p>three bugs, one parent. server trusts the client to declare the value,
+the size and whether the rule applies on this particular request. the
+fields max_coverage_price and min_content_value_price exist in the
+response. somebody wrote them. they just are not wired to the
+validator.</p>
+<p>fix is the boring one. recompute on the server at the moment of
+purchase, from the order row, not from the request body. validate the
+declared value against the maximum that the server itself just
+returned. pick the parcel size from persisted state.</p>
+<p>----[  retest</p>
+<p>reported. came back a week later. summary still misquotes ninety nine
+million as a twenty euro line item. purchase endpoint now returns 422
+with an empty errors array for any payload, including the boring
+baseline that worked before. somebody plugged the exit door and left
+the wrong price tag on the wall.</p>
+<p>partial fix. root cause unfixed. reportable as medium today, would be
+high again the moment the purchase guard regresses.</p>
+<p>----[  takeaway</p>
+<p>when a server returns its own rule next to its own decision, read both.
+the response is sometimes confessing.</p>
+</article>
+</main>
+<footer>
+  <div class="container">
+    <div>&copy; 2025 &mdash; responsible disclosure, always.</div>
+    <img src="../email.png" alt="" class="email-img">
+  </div>
+</footer>
+</div>
+<script src="../gen.js"></script>
+<script>
+document.querySelectorAll('pre').forEach(function(pre) {
+  var btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.textContent = 'copy';
+  btn.onclick = function() {
+    navigator.clipboard.writeText(pre.querySelector('code').textContent);
+    btn.textContent = 'copied';
+    btn.classList.add('copied');
+    setTimeout(function() { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1500);
+  };
+  pre.appendChild(btn);
+});
+</script>
+</body>
+</html>

