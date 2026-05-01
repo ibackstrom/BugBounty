@@ -21,7 +21,7 @@ function buggedForest(canvas, seed) {
   }
 
   // palette
-  var bg = '#f2f0ec';
+  var bg = '#ece4d0';
   var ink = '#111';
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
