@@ -1,11 +1,11 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
-  --bg: #f5f4f0;
+  --bg: #ece4d0;
   --text: #111;
-  --text-muted: #666;
+  --text-muted: #5a5a5a;
   --accent: #111;
-  --code-bg: #ebeae6;
+  --code-bg: #ddd4bd;
   --border: #ccc;
   --bar-color: #111;
   --max-w: 640px;
