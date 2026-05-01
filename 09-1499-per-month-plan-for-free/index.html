@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>$1,499/month plan for free, on a HIPAA platform — r1gor</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<div class="page-frame">
+<span class="corner-bl">&mdash;</span>
+<span class="corner-br">&mdash;</span>
+<header>
+  <div class="container">
+    <div class="site-id">[00.00_r1gor]<br>[00.00_bugbounty]</div>
+    <a href="../" class="site-title">r1gor</a>
+    <div class="bar"><div class="bar-fill"></div><div class="bar-short"></div></div>
+  </div>
+</header>
+<main class="container">
+<hr class="section-rule">
+<a href="../" class="back">all write-ups</a>
+<article>
+<h1>$1,499/month plan for free, on a HIPAA platform</h1>
+<canvas id="gen-art" data-seed="09-1499-per-month-plan-for-free" width="640" height="200"></canvas>
+<p>Target is a healthcare automation platform. Clinics wire it up to
+their EHR, lab, scheduling, billing. Workflows shuffle PHI between
+systems. The pricing page goes Starter $149, Professional $399,
+Scale Up $1,499, Enterprise "talk to sales".</p>
+<p>I wanted Scale Up. I did not want to pay $1,499.</p>
+<h2>the bug</h2>
+<p>The billing surface is a Hasura GraphQL endpoint. After signing up I
+grabbed a Hasura JWT from the session token endpoint and hit the
+schema.</p>
+<pre><code class="language-graphql">query {
+  pricingTable {
+    name
+    productId
+    isSelectable
+    price { id unit_amount interval }
+  }
+}
+</code></pre>
+<p>Every plan came back with <code>isSelectable: true</code> and a Stripe price id
+sitting next to it. Including Scale Up.</p>
+<pre><code class="language-graphql">mutation {
+  selectPlan(priceId: &quot;price_1OjeucIwl3CYZ39AhhJbbFmZ&quot;) {
+    name
+    status
+    trialEnd
+    currentPeriodEnd
+    requiresPaymentInfo
+    price { unit_amount interval }
+  }
+}
+</code></pre>
+<p>response, http 200:</p>
+<pre><code class="language-json">{
+  &quot;name&quot;: &quot;Scale Up Plan&quot;,
+  &quot;status&quot;: &quot;trialing&quot;,
+  &quot;trialEnd&quot;: &quot;2026-05-21T16:08:55.000Z&quot;,
+  &quot;requiresPaymentInfo&quot;: true,
+  &quot;price&quot;: { &quot;unit_amount&quot;: 149900, &quot;interval&quot;: &quot;month&quot; }
+}
+</code></pre>
+<p>read it twice. same json object. server says
+<code>requiresPaymentInfo: true</code> and in the same breath sets the plan to
+trialing and hands me a 28 day expiry. the field exists. somebody
+wrote it. it just is not wired to the gate.</p>
+<h2>confirming the entitlements</h2>
+<pre><code class="language-graphql">query {
+  entitlements {
+    plan { name status }
+    quotas {
+      runs { limit count }
+      workflows { limit count }
+    }
+  }
+}
+</code></pre>
+<pre><code class="language-json">{
+  &quot;plan&quot;: { &quot;name&quot;: &quot;Scale Up Plan&quot;, &quot;status&quot;: &quot;trialing&quot; },
+  &quot;quotas&quot;: {
+    &quot;runs&quot;:      { &quot;limit&quot;: 24000, &quot;count&quot;: 0 },
+    &quot;workflows&quot;: { &quot;limit&quot;: 15,    &quot;count&quot;: 0 }
+  }
+}
+</code></pre>
+<p>24,000 workflow runs a month. 15 concurrent workflows. Scale Up
+features unlocked. No credit card on file. No billing address. No
+Stripe customer. The trial badge in the UI is the only thing
+distinguishing this from a paying tenant.</p>
+<h2>the bonus round</h2>
+<p>There is a separate <code>extendTrial</code> mutation. First call returns
+<code>true</code>. Subsequent calls rate limit with "Trial extension limit
+reached". So the trial is renewable once, then you burn the account
+and sign up again. New email, new tenant, another 28 days of
+$1,499 a month.</p>
+<p>Enterprise is properly blocked. <code>selectPlan</code> with the Enterprise
+price id returns "Enterprise plan cannot be selected". So the gate
+exists in the resolver. It just covers exactly one plan out of four.</p>
+<p>Starter ($149) and Professional ($399) bypass the same way.</p>
+<h2>why it works</h2>
+<p>The pricing table flags every paid plan <code>isSelectable: true</code> whether
+the caller has a payment method or not. <code>selectPlan</code> reads
+<code>isSelectable</code> and the explicit Enterprise denylist, then provisions
+the trial. Stripe customer creation, payment method check, billing
+guard - all of that lives downstream of the entitlement update. The
+entitlement is granted before the payment surface is even consulted.</p>
+<p>The fix is the boring one. <code>selectPlan</code> should refuse to grant any
+paid trial without a Stripe payment method on file, or a sales-led
+override flag. Trust the field that already exists in the response,
+<code>requiresPaymentInfo</code>. The server is telling itself the answer in
+the same payload it ignores.</p>
+<h2>scale</h2>
+<ul>
+<li>$1,499/month plan, free, instant</li>
+<li>24,000 workflow runs per cycle, on a HIPAA platform</li>
+<li>repeatable per email address, per tenant, indefinitely</li>
+<li>enterprise gate exists, three other paid tiers go around it</li>
+</ul>
+<p>The healthcare angle is what makes this more than a billing bug.
+Every workflow run on Scale Up can move PHI between connected
+systems. A free tenant gets 24,000 of those a month. Whatever the
+abuse case is, you scale it on someone else's compliance bill.</p>
+<p>reported.</p>
+<p>when a server returns its own gate next to its own decision, read
+both. the response is sometimes confessing.</p>
+</article>
+</main>
+<footer>
+  <div class="container">
+    <div>&copy; 2025 &mdash; responsible disclosure, always.</div>
+    <img src="../email.png" alt="" class="email-img">
+  </div>
+</footer>
+</div>
+<script src="../gen.js"></script>
+<script>
+document.querySelectorAll('pre').forEach(function(pre) {
+  var btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.textContent = 'copy';
+  btn.onclick = function() {
+    navigator.clipboard.writeText(pre.querySelector('code').textContent);
+    btn.textContent = 'copied';
+    btn.classList.add('copied');
+    setTimeout(function() { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1500);
+  };
+  pre.appendChild(btn);
+});
+</script>
+</body>
+</html>
