@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Full Financials of Every Listing on a Business Marketplace, From a One Minute Old Account — r1gor</title>
+  <link rel="stylesheet" href="../style.css?v=1778428028">
+</head>
+<body>
+<div class="page-frame">
+<span class="corner-bl">&mdash;</span>
+<span class="corner-br">&mdash;</span>
+<header>
+  <div class="container">
+    <div class="site-id">[00.00_r1gor]<br>[00.00_bugbounty]</div>
+    <a href="../" class="site-title">r1gor</a>
+    <div class="bar"><div class="bar-fill"></div><div class="bar-short"></div></div>
+  </div>
+</header>
+<main class="container">
+<hr class="section-rule">
+<a href="../" class="back">all write-ups</a>
+<article>
+<h1>Full Financials of Every Listing on a Business Marketplace, From a One Minute Old Account</h1>
+<canvas id="gen-art" data-seed="10-financial-data-of-every-listing-on-a-business-marketplace" width="640" height="200"></canvas>
+<p>----[  Target</p>
+<p>The target is a brokerage that operates a marketplace for the
+private sale of profitable online businesses. Listings are
+worth between five thousand and several million dollars. The
+brokerage charges sellers to list and gates the most sensitive
+data on each listing behind a buyer side verification flow. The
+published policy commits the platform to protect two pieces of
+information per listing until the buyer completes identity and
+proof of funds verification: the live URL of the business, and the
+full profit and loss history. One of the two is properly gated.
+The other is not.</p>
+<p>----[  Setup</p>
+<p>A new account was created for this test. Email verified, nothing
+else. The account has the following state at the moment of the
+request:</p>
+<pre><code>ID Verified:           none
+Liquidity Verified:    none
+Remaining Unlocks:     0
+Unlock Max Listing:    none
+Role:                  customer
+</code></pre>
+<p>Zero verifications. Zero unlocks. The user is not allowed to view
+any private listing data under the published policy.</p>
+<p>----[  Observation</p>
+<p>The single page application calls one endpoint to render a listing
+page:</p>
+<pre><code>GET /api/v1/listings/show?listing_number=NNNNN
+Authorization: Bearer &lt;session&gt;
+</code></pre>
+<p>The response includes the gated URL field as a redacted string,
+which is correct. It also includes a field named <code>metrics</code>. The
+<code>metrics</code> field is a list of monthly objects. Each object contains
+revenue, expenses, profit, advertising spend ratio, and cost of
+goods ratio. The values are real. The data is delivered to a user
+who has unlocked nothing.</p>
+<pre><code>{
+  &quot;listing_number&quot;: NNNNN,
+  &quot;asking_price&quot;: NNNNNNN,
+  &quot;country_of_registration&quot;: &quot;XX&quot;,
+  &quot;metrics&quot;: [
+    { &quot;month&quot;: &quot;YYYY-MM&quot;,
+      &quot;revenue&quot;:  REVENUE,
+      &quot;expenses&quot;: EXPENSES,
+      &quot;profit&quot;:   PROFIT,
+      &quot;tacos_pct&quot;: NN.N,
+      &quot;cogs_pct&quot;:  NN.N },
+    { &quot;month&quot;: &quot;YYYY-MM&quot;, ... },
+    ...
+  ]
+}
+</code></pre>
+<p>The bundle ships the reason. The render path branches on a flag
+that comes from the user record, not from the response:</p>
+<pre><code>const isPrivate = user.unlocked.includes(listing_number);
+const placeholder = [...Array(23)].map(() =&gt; ({
+  grossRevenue: Math.random() * 99e3 + 1e3,
+  netProfit:    Math.random() * 99e3 + 1e3
+}));
+
+(isPrivate ? response.metrics : placeholder).map(...)
+</code></pre>
+<p>When the user has not paid, the chart is drawn from a local array
+of random numbers. The real numbers are still in the response,
+already on the wire, already in the browser, just not selected for
+rendering.</p>
+<p>----[  Scale</p>
+<p>The listing identifier is a sequential integer. A single loop
+walks the full active inventory:</p>
+<pre><code>for n in $(seq START END); do
+  curl -s -H &quot;Authorization: Bearer $T&quot; \
+    &quot;https://[API]/api/v1/listings/show?listing_number=$n&quot;
+done
+</code></pre>
+<p>A few hundred lines of script reproduce the entire competitive
+intelligence database that the brokerage sells access to. Sample
+rows from a live run, on the same unverified account:</p>
+<pre><code>[redacted #1]  affiliate, business niche      asking ~5.5M    margin ~50%
+[redacted #2]  ecommerce, supplements         asking ~1.5M    margin ~20%
+[redacted #3]  service, automotive            asking ~1.4M    margin ~35%
+[redacted #4]  amazon fba, apparel            asking ~430k    margin ~15%
+[redacted #5]  amazon fba, beauty             asking ~400k    margin ~20%
+</code></pre>
+<p>Months of profit and loss history are returned for every row.</p>
+<p>----[  Why It Matters</p>
+<p>The brokerage charges buyers for unlocks and requires identity and
+proof of funds before private data is shown. The gate is a
+business model, not a feature. Removing it harms three groups at
+the same time.</p>
+<pre><code>o  Sellers, who agreed to confidential listing terms, find the
+   monthly profit history of their business available to any
+   email address on the internet.
+
+o  Competing brokerages and acquirers receive a free feed of
+   the entire asking price and margin distribution of the
+   inventory.
+
+o  The brokerage loses the regulatory cover it relies on to
+   require buyer verification at all.
+</code></pre>
+<p>The bug also weakens the surrounding controls. Verification is the
+gate, the gate is unenforced, so the verification flow exists
+mostly as a deterrent against the honest user.</p>
+<p>----[  Remediation</p>
+<p>The authorization check belongs on the server. The <code>metrics</code> field
+must be filtered out of the response when the requesting user has
+not unlocked the listing, regardless of what the bundle does with
+the value. The placeholder logic on the client should remain as a
+visual fallback, not as a privacy boundary.</p>
+<p>The unlock state already exists in the user record consulted by
+the same endpoint. The fix is one conditional in the serializer.</p>
+<p>----[  Closing</p>
+<p>The listing page works. The verification flow works. The unlock
+flow works. The defect is a single field that the server returns
+to every caller and the browser is asked to hide. The browser is
+not where access control lives.</p>
+<p>Reported.</p>
+<p>A control that runs in the client is a suggestion to the client.</p>
+</article>
+</main>
+<footer>
+  <div class="container">
+    <div>&copy; 2025 &mdash; responsible disclosure, always.</div>
+    <img src="../email.png" alt="" class="email-img">
+  </div>
+</footer>
+</div>
+<script src="../gen.js?v=1778428028"></script>
+<script>
+document.querySelectorAll('pre').forEach(function(pre) {
+  var btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.textContent = 'copy';
+  btn.onclick = function() {
+    navigator.clipboard.writeText(pre.querySelector('code').textContent);
+    btn.textContent = 'copied';
+    btn.classList.add('copied');
+    setTimeout(function() { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1500);
+  };
+  pre.appendChild(btn);
+});
+</script>
+</body>
+</html>
