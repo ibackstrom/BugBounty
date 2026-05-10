@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A Path Prefix That Walked Past Cloudflare on an Open Banking API — r1gor</title>
+  <link rel="stylesheet" href="../style.css?v=1778427652">
+</head>
+<body>
+<div class="page-frame">
+<span class="corner-bl">&mdash;</span>
+<span class="corner-br">&mdash;</span>
+<header>
+  <div class="container">
+    <div class="site-id">[00.00_r1gor]<br>[00.00_bugbounty]</div>
+    <a href="../" class="site-title">r1gor</a>
+    <div class="bar"><div class="bar-fill"></div><div class="bar-short"></div></div>
+  </div>
+</header>
+<main class="container">
+<hr class="section-rule">
+<a href="../" class="back">all write-ups</a>
+<article>
+<h1>A Path Prefix That Walked Past Cloudflare on an Open Banking API</h1>
+<canvas id="gen-art" data-seed="10-cloudflare-bypass-on-an-open-banking-api" width="640" height="200"></canvas>
+<p>----[  Target</p>
+<p>The target is an open banking platform that aggregates account
+data, transactions, and payroll records from banks across Latin
+America. Production traffic terminates on <code>api.belvo.com</code>. The
+sandbox environment, used by integrators in development, lives on
+<code>sandbox.belvo.com</code>. Both sit behind Cloudflare with a managed
+challenge enabled at the zone level.</p>
+<p>----[  Observation</p>
+<p>A request for the document root triggers the standard challenge:</p>
+<pre><code>$ curl -sI https://sandbox.belvo.com/
+HTTP/2 403
+server: cloudflare
+cf-mitigated: challenge
+</code></pre>
+<p>A request for the API root, on the same hostname, does not:</p>
+<pre><code>$ curl -s https://sandbox.belvo.com/api/ -H &quot;Accept: application/json&quot;
+[{&quot;message&quot;:&quot;Authentication credentials were not provided.&quot;,
+  &quot;code&quot;:&quot;not_authenticated&quot;,
+  &quot;request_id&quot;:&quot;1f8f3536ec7944c39a386da82d5c0eea&quot;}]
+</code></pre>
+<p>The response is a JSON error from the origin Django application.
+Cloudflare is no longer in the path. The same behavior holds for
+every documented API route:</p>
+<pre><code>GET  /api/institutions/
+GET  /api/accounts/
+GET  /api/transactions/
+GET  /api/links/
+</code></pre>
+<p>A second prefix shows the same property. The ACME HTTP-01
+validation path is excluded from the challenge as well, and returns
+origin responses for arbitrary names:</p>
+<pre><code>$ curl -s -o /dev/null -w &quot;%{http_code}\n&quot; \
+    https://sandbox.belvo.com/.well-known/acme-challenge/test
+404
+</code></pre>
+<p>----[  Method Surface</p>
+<p>The bypass applies per HTTP method. The following methods reach the
+origin:</p>
+<pre><code>GET, POST, OPTIONS
+</code></pre>
+<p>The following are intercepted by Cloudflare and answered with a
+challenge or a 405:</p>
+<pre><code>PATCH, DELETE, TRACE
+</code></pre>
+<p>The asymmetry is consistent across both the sandbox and production
+hosts. It indicates that the rule set targets browser-shaped
+traffic on root paths, while the JSON API and a small set of
+operational paths were carved out for client compatibility.</p>
+<p>----[  Why It Matters</p>
+<p>The endpoints behind the bypass require authentication. None of
+the calls above leak data on their own. The bypass is not a direct
+read primitive. What it does is remove the cost of every other
+test that follows.</p>
+<pre><code>o  Wordlists run at line speed against the origin without
+   solving challenges or rotating residential proxies.
+
+o  Authentication probes (Bearer, Basic, session cookies) can
+   be differentiated by error code without WAF interference.
+
+o  Any future bug in the API stack is reachable from any
+   network, with no challenge layer in front of it.
+
+o  Rate limiting that depends on the WAF identifying the
+   client is not in force on the API path.
+</code></pre>
+<p>For a regulated financial data aggregator, the API surface is the
+asset. Removing the layer that was bought to defend it changes the
+posture of the entire perimeter.</p>
+<p>----[  Remediation</p>
+<p>The Cloudflare zone configuration must apply the same managed
+challenge to the API path and to the <code>.well-known</code> path that it
+applies to the document root. Where the challenge interferes with
+client SDKs, a bot management rule with API-aware verification is
+the documented replacement. Either approach restores symmetry
+between the routes and removes the prefix as a discriminator.</p>
+<p>----[  Closing</p>
+<p>The flaw is not in Cloudflare and not in the application. It is in
+the rule that connects the two. A single path prefix decides
+whether a request is treated as a browser session or as a trusted
+machine call, and the prefix is published in the public API
+documentation.</p>
+<p>Reported.</p>
+<p>A perimeter is only as wide as the narrowest rule that defines it.</p>
+</article>
+</main>
+<footer>
+  <div class="container">
+    <div>&copy; 2025 &mdash; responsible disclosure, always.</div>
+    <img src="../email.png" alt="" class="email-img">
+  </div>
+</footer>
+</div>
+<script src="../gen.js?v=1778427652"></script>
+<script>
+document.querySelectorAll('pre').forEach(function(pre) {
+  var btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.textContent = 'copy';
+  btn.onclick = function() {
+    navigator.clipboard.writeText(pre.querySelector('code').textContent);
+    btn.textContent = 'copied';
+    btn.classList.add('copied');
+    setTimeout(function() { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1500);
+  };
+  pre.appendChild(btn);
+});
+</script>
+</body>
+</html>
