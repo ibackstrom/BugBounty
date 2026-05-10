@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>r1gor</title>
-  <link rel="stylesheet" href="style.css?v=1777643012">
+  <link rel="stylesheet" href="style.css?v=1778427508">
 </head>
 <body>
 <div class="page-frame">
@@ -21,6 +21,11 @@
 <hr class="section-rule">
 <p class="index-intro">Bug bounty write-ups.</p>
 <ul class="article-list">
+<li><a href="10-waf-that-shipped-its-own-bypass-key/">
+  <div class="num">10</div>
+  <div class="title">The WAF That Shipped Its Own Bypass Key</div>
+  <div class="summary">Licensed payment processor. The AWS WAF integration key is hardcoded in the public JS bundle, so the captcha that gates PSD2 account creation is bypassed by sending the WAF its own key in a header.</div>
+</a></li>
 <li><a href="09-1499-per-month-plan-for-free/">
   <div class="num">09</div>
   <div class="title">$1,499/month plan for free, on a HIPAA platform</div>
@@ -70,7 +75,7 @@
   </div>
 </footer>
 </div>
-<script src="gen.js?v=1777643012"></script>
+<script src="gen.js?v=1778427508"></script>
 <script>
 document.querySelectorAll('pre').forEach(function(pre) {
   var btn = document.createElement('button');

