@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>A Path Prefix That Walked Past Cloudflare on an Open Banking API — r1gor</title>
-  <link rel="stylesheet" href="../style.css?v=1778427652">
+  <link rel="stylesheet" href="../style.css?v=1778427844">
 </head>
 <body>
 <div class="page-frame">
@@ -25,20 +25,20 @@
 <canvas id="gen-art" data-seed="10-cloudflare-bypass-on-an-open-banking-api" width="640" height="200"></canvas>
 <p>----[  Target</p>
 <p>The target is an open banking platform that aggregates account
-data, transactions, and payroll records from banks across Latin
-America. Production traffic terminates on <code>api.belvo.com</code>. The
-sandbox environment, used by integrators in development, lives on
-<code>sandbox.belvo.com</code>. Both sit behind Cloudflare with a managed
-challenge enabled at the zone level.</p>
+data, transactions, and payroll records from retail banks. Two
+hostnames are in scope: a production API and a sandbox
+used by integrators. Both sit behind Cloudflare with a managed
+challenge enabled at the zone level. The hostnames are referred to
+below as <code>[SANDBOX]</code> and <code>[API]</code>.</p>
 <p>----[  Observation</p>
 <p>A request for the document root triggers the standard challenge:</p>
-<pre><code>$ curl -sI https://sandbox.belvo.com/
+<pre><code>$ curl -sI https://[SANDBOX]/
 HTTP/2 403
 server: cloudflare
 cf-mitigated: challenge
 </code></pre>
 <p>A request for the API root, on the same hostname, does not:</p>
-<pre><code>$ curl -s https://sandbox.belvo.com/api/ -H &quot;Accept: application/json&quot;
+<pre><code>$ curl -s https://[SANDBOX]/api/ -H &quot;Accept: application/json&quot;
 [{&quot;message&quot;:&quot;Authentication credentials were not provided.&quot;,
   &quot;code&quot;:&quot;not_authenticated&quot;,
   &quot;request_id&quot;:&quot;1f8f3536ec7944c39a386da82d5c0eea&quot;}]
@@ -55,7 +55,7 @@ GET  /api/links/
 validation path is excluded from the challenge as well, and returns
 origin responses for arbitrary names:</p>
 <pre><code>$ curl -s -o /dev/null -w &quot;%{http_code}\n&quot; \
-    https://sandbox.belvo.com/.well-known/acme-challenge/test
+    https://[SANDBOX]/.well-known/acme-challenge/test
 404
 </code></pre>
 <p>----[  Method Surface</p>
@@ -115,7 +115,7 @@ documentation.</p>
   </div>
 </footer>
 </div>
-<script src="../gen.js?v=1778427652"></script>
+<script src="../gen.js?v=1778427844"></script>
 <script>
 document.querySelectorAll('pre').forEach(function(pre) {
   var btn = document.createElement('button');
