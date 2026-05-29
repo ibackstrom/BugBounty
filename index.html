@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>r1gor</title>
-  <link rel="stylesheet" href="style.css?v=1778428028">
+  <link rel="stylesheet" href="style.css?v=1780037078">
 </head>
 <body>
 <div class="page-frame">
@@ -21,6 +21,11 @@
 <hr class="section-rule">
 <p class="index-intro">Bug bounty write-ups.</p>
 <ul class="article-list">
+<li><a href="11-how-i-almost-hacked-claude/">
+  <div class="num">11</div>
+  <div class="title">How I Almost Hacked Claude</div>
+  <div class="summary">Claude Code. A malicious .mcp.json exfiltrates environment variables before any tool prompt. Approval is keyed on server name only, so a second commit can swap the command and run on the next project open with no new dialog.</div>
+</a></li>
 <li><a href="10-financial-data-of-every-listing-on-a-business-marketplace/">
   <div class="num">10</div>
   <div class="title">Full Financials of Every Listing on a Business Marketplace, From a One Minute Old Account</div>
@@ -75,7 +80,7 @@
   </div>
 </footer>
 </div>
-<script src="gen.js?v=1778428028"></script>
+<script src="gen.js?v=1780037078"></script>
 <script>
 document.querySelectorAll('pre').forEach(function(pre) {
   var btn = document.createElement('button');
