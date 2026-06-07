@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>One Endpoint on a HIPAA App That Forgot to Check Who You Are — r1gor</title>
+  <link rel="stylesheet" href="../style.css?v=1780861906">
+</head>
+<body>
+<div class="page-frame">
+<span class="corner-bl">&mdash;</span>
+<span class="corner-br">&mdash;</span>
+<header>
+  <div class="container">
+    <div class="site-id">[00.00_r1gor]<br>[00.00_bugbounty]</div>
+    <a href="../" class="site-title">r1gor</a>
+    <div class="bar"><div class="bar-fill"></div><div class="bar-short"></div></div>
+  </div>
+</header>
+<main class="container">
+<hr class="section-rule">
+<a href="../" class="back">all write-ups</a>
+<article>
+<h1>One Endpoint on a HIPAA App That Forgot to Check Who You Are</h1>
+<canvas id="gen-art" data-seed="12-one-endpoint-that-forgot-to-check-who-you-are" width="640" height="200"></canvas>
+<p>----[  Target</p>
+<p>A patient facing health assistant built on top of Epic MyChart.
+Patients link their hospital records, the app reads their chart,
+summarises an inbox, runs an AI search over their history. The
+backend is a small REST API. Every patient route is behind a
+login. Every one but a single status endpoint.</p>
+<p>The program is not new. Launched in 2024, more than sixty thousand
+dollars paid out, years of researchers ahead of me. The kind of
+target where the reasonable assumption is that the easy surface is
+gone. I spent one evening checking whether that assumption holds.
+It did not.</p>
+<p>----[  Observation</p>
+<p>The single page app loads its patient data through a set of routes
+under <code>/api</code>. With no cookie and no Authorization header, the
+whole set answers the same way:</p>
+<pre><code>POST /api/epic-sync/create      -&gt; 401 Unauthorized
+POST /api/ai-search             -&gt; 401 Unauthorized
+GET  /api/in-basket-summary/x   -&gt; 401 Unauthorized
+GET  /api/disclaimer            -&gt; 401 Unauthorized
+POST /api/message-report        -&gt; 401 Unauthorized
+</code></pre>
+<p>One sibling does not:</p>
+<pre><code>GET /api/epic-sync/status?patientFhirId=...&amp;partner=hhc
+</code></pre>
+<p>No 401. The request goes straight to the backend lookup. The auth
+middleware that wraps the other routes was never attached to this
+one.</p>
+<p>----[  Confirmation</p>
+<p>The endpoint validates its input before it touches the database,
+and it does all of it unauthenticated. Walking the chain shows the
+request reaching the lookup:</p>
+<pre><code>GET /api/epic-sync/status                             -&gt; 400  patientFhirId required
+GET /api/epic-sync/status?patientFhirId=x             -&gt; 400  partner required
+GET /api/epic-sync/status?patientFhirId=x&amp;partner=hhc -&gt; 404  No sync found
+</code></pre>
+<p>The 404 is the tell. A blocked route returns 401 before it parses
+anything. This one parses both parameters, runs the query, finds
+no matching record for the junk id, and reports it. The lookup
+ran. It just had nothing to return for <code>x</code>.</p>
+<p>For a real <code>patientFhirId</code> with a linked Epic record, the same
+call returns the sync object instead of "No sync found". The
+client requests it with the selection set:</p>
+<pre><code>{ id, status, createdAt }
+</code></pre>
+<p>So a positive response hands an unauthenticated caller the sync
+record id, the link status (<code>PENDING</code> / <code>IN_PROGRESS</code> /
+<code>COMPLETED</code> / <code>FAILED</code>), and the date the patient connected their
+MyChart records.</p>
+<p>----[  The limit, stated honestly</p>
+<p><code>patientFhirId</code> is an opaque Epic identifier, long and not
+guessable. Blind enumeration is not realistic, and wildcard, SQL
+and NoSQL payloads (<code>%</code>, <code>*</code>, <code>' OR '1'='1</code>, <code>{"$ne":null}</code>) are
+all treated as literal strings and return "No sync found". You
+need the exact id.</p>
+<p>That makes this a confirmation oracle, not a dump. The value shows
+up when an attacker already holds a target's FHIR id, which leaks
+in referrals, screenshots, support tickets, or through a separate
+IDOR. Given the id, an unauthenticated party can confirm the
+person is a patient on this platform and read the state and date
+of their EHR link. In a HIPAA setting, confirming that someone is
+a patient without a login is the finding, regardless of how thin
+the rest of the record is.</p>
+<p>I did not pull a real patient's record. The missing control and
+the shape of the positive response are both proven above without
+touching anyone's PHI.</p>
+<p>----[  Remediation</p>
+<p>Attach the same auth middleware the sibling routes already use to
+<code>/api/epic-sync/status</code>. Then enforce object level authorization
+so a caller can only read the sync status tied to their own
+<code>patientFhirId</code>, not any value they type into the query string.</p>
+<p>----[  Closing</p>
+<p>Reported. Triaged. Two hundred dollars.</p>
+<p>Not a large bounty, and not a large bug. The point is smaller and
+more useful than the payout. A program with years of history and a
+five figure bounty table still had one route where someone forgot
+to type the middleware. The mature target is not the secure
+target. It is the one where the obvious holes are gone and the
+boring one is still sitting there, waiting for a chill evening.</p>
+<p>The other routes prove the team knows how to require a login. This
+one just slipped the net.</p>
+</article>
+</main>
+<footer>
+  <div class="container">
+    <div>&copy; 2025 &mdash; responsible disclosure, always.</div>
+    <img src="../email.png" alt="" class="email-img">
+  </div>
+</footer>
+</div>
+<script src="../gen.js?v=1780861906"></script>
+<script>
+document.querySelectorAll('pre').forEach(function(pre) {
+  var btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.textContent = 'copy';
+  btn.onclick = function() {
+    navigator.clipboard.writeText(pre.querySelector('code').textContent);
+    btn.textContent = 'copied';
+    btn.classList.add('copied');
+    setTimeout(function() { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1500);
+  };
+  pre.appendChild(btn);
+});
+</script>
+</body>
+</html>

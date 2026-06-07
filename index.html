@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>r1gor</title>
-  <link rel="stylesheet" href="style.css?v=1780037078">
+  <link rel="stylesheet" href="style.css?v=1780861906">
 </head>
 <body>
 <div class="page-frame">
@@ -21,6 +21,11 @@
 <hr class="section-rule">
 <p class="index-intro">Bug bounty write-ups.</p>
 <ul class="article-list">
+<li><a href="12-one-endpoint-that-forgot-to-check-who-you-are/">
+  <div class="num">12</div>
+  <div class="title">One Endpoint on a HIPAA App That Forgot to Check Who You Are</div>
+  <div class="summary">A HIPAA patient assistant on Epic MyChart. Every patient route needs a login except one status endpoint that lost its auth middleware. Unauthenticated, it confirms a person is a patient and returns their EHR link status. Established program, five figure table, one chill evening.</div>
+</a></li>
 <li><a href="11-how-i-almost-hacked-claude/">
   <div class="num">11</div>
   <div class="title">How I Almost Hacked Claude</div>
@@ -80,7 +85,7 @@
   </div>
 </footer>
 </div>
-<script src="gen.js?v=1780037078"></script>
+<script src="gen.js?v=1780861906"></script>
 <script>
 document.querySelectorAll('pre').forEach(function(pre) {
   var btn = document.createElement('button');
